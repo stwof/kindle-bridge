@@ -6,6 +6,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
 [![OpenCC](https://img.shields.io/badge/OpenCC-BYVoid-green.svg)](https://github.com/BYVoid/OpenCC)
+[![微信小程序](https://img.shields.io/badge/微信小程序-端内运行-07C160.svg)](miniprogram/README.md)
+
+仓库：<https://github.com/stwof/kindle-bridge>
 
 ---
 
@@ -56,6 +59,27 @@ EPUB 转换**只动文本节点**，标签、样式、脚本、图片、字体�
 
 ## 快速开始
 
+### 下载现成的（推荐）
+
+去 [Releases](https://github.com/stwof/kindle-bridge/releases) 拿打包好的版本：
+
+| 产物 | 说明 |
+|---|---|
+| `Kindle桥.exe` | **Windows 单文件版**，双击即用，不需要装 Python |
+| `kindle-bridge-<版本>.zip` | 源码包，解压后用启动器运行 |
+
+> 单文件版里只读资源（网页、词表）打进了 exe，**用户数据（`收书/`、`导出/`、`工具/`）
+> 落在 exe 旁边** —— 把 exe 放哪儿，你就在那儿放书、拿结果。
+
+### 从源码跑
+
+```bash
+git clone https://github.com/stwof/kindle-bridge.git
+cd kindle-bridge
+pip install -r requirements.txt
+python app.py            # 浏览器会自动打开 http://127.0.0.1:8765/
+```
+
 ### Windows
 
 1. 双击 **`启动 Kindle桥.bat`**
@@ -70,14 +94,13 @@ chmod +x start.sh
 ./start.sh            # 指定端口： ./start.sh 9000
 ```
 
-### 手动启动
+### 命令行参数
 
-```bash
-pip install -r requirements.txt
-python app.py --port 8765 --host 127.0.0.1
+```
+python app.py --port 8765 --host 127.0.0.1 --no-browser
 ```
 
-参数：`--port` 端口（默认 8765）、`--host` 绑定地址（默认仅本机）、`--no-browser` 不自动开浏览器。
+`--port` 端口（默认 8765）、`--host` 绑定地址（默认仅本机）、`--no-browser` 不自动开浏览器。
 
 ### 微信小程序
 
