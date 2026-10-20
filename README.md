@@ -217,7 +217,7 @@ pyinstaller Kindle桥.spec
 
 本项目代码采用 [MIT 许可证](LICENSE)。
 
-第三方组件与数据各自遵循其原有许可，详见 LICENSE 文件末尾的说明。
+第三方组件与数据各自遵循其原有许可，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 本项目不包含、也不分发任何受版权保护的书籍正文。
 
 ## 致谢
