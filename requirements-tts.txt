@@ -1,0 +1,13 @@
+# 本地语音合成（TTS）· 可选依赖
+#
+# 上游项目（MIT 之外，引擎本身用 MPL-2.0）：https://github.com/coqui-ai/TTS
+# 这是「朗读」页背后的引擎。它依赖 PyTorch，体积较大，所以**不是**核心依赖，
+# 默认不装也能跑其它所有功能。
+#
+# ⚠️ 重要：Coqui TTS 目前只支持 Python 3.9 ~ 3.11（官方明确不含 3.12+）。
+#    本机若是 Python 3.12 / 3.13，请另建一个 3.11 的虚拟环境再装，例如：
+#      python3.11 -m venv .venv && .venv\Scripts\activate && pip install -r requirements-tts.txt
+#
+# 装完重启 Kindle 桥，到「朗读」页即可用；语音模型在首次使用时由 Coqui 自动下载
+# （约 50~120 MB，缓存在本机 ~/.local/share/tts，之后不用再下）。
+TTS>=0.21,<0.23

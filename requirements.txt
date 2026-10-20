@@ -1,6 +1,7 @@
 # Kindle 桥 —— 运行依赖
 #
-# 唯一的第三方依赖就是它：OpenCC 简繁转换内核。
+# 唯一的**核心**第三方依赖就是它：OpenCC 简繁转换内核。
+# （「朗读」TTS 是可选功能，单独在 requirements-tts.txt 里，需 Python 3.9~3.11。）
 #   上游项目（事实标准，MIT License）：https://github.com/BYVoid/OpenCC
 #   这里用 PyPI 上的纯 Python 移植版：opencc-python-reimplemented
 #   选它是因为：自带完整数据表（7000+ 字 + 词组）、纯 Python 不需要编译器、

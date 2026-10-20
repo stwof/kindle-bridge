@@ -319,3 +319,25 @@ td.num, th.num { text-align: right; white-space: nowrap; }
 .qrow { display: flex; gap: 10px; align-items: center; padding: 6px 0; font-size: 12.5px; }
 .qrow .qn { flex: 1; min-width: 0; word-break: break-all; }
 .qrow .qs { color: var(--muted); white-space: nowrap; }
+
+/* 本地语音合成 TTS */
+.tts-opts { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 4px 0 10px; }
+.tts-opts select {
+  font-size: 13px; padding: 6px 8px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--text);
+}
+.tts-area {
+  width: 100%; min-height: 180px; resize: vertical;
+  font-size: 14px; line-height: 1.7; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); color: var(--text); font-family: inherit;
+}
+.tts-area:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+#tts-result { margin-top: 10px; }
+#tts-result audio { width: 100%; }
+.tts-clip {
+  float: right; margin-left: 8px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--muted);
+  border-radius: 6px; padding: 1px 7px; font-size: 12px; cursor: pointer;
+}
+.tts-clip:hover { color: var(--accent); border-color: var(--accent); }

@@ -27,6 +27,7 @@ Kindle 桥在你本机开一个小服务，用数据线连上 Kindle 后，把�
 | **书库** | 扫描 Kindle 上的书，筛出「微信读书不兼容」的，一键导出 | `导出/微信读书/` |
 | **书籍投递** | EPUB/MOBI/AZW3 投进设备，四条路线任选 | `收书/` → 设备 `documents/` |
 | **简繁转换** | EPUB / TXT 在**简体 ↔ 繁体**之间互转 | 下载或 `导出/简繁转换/` |
+| **朗读** | 文字转语音（TTS），本地用 Coqui TTS 合成，不联网 | 浏览器内播放 / 下载 WAV |
 | **公版书库** | 检索并取回 Gutenberg / Standard Ebooks / 中文经典 | `收书/` |
 | **标注** | 解析 `My Clippings.txt`，导出笔记 | `导出/标注/` |
 | **生词** | 解析 `vocab.db`，导出 CSV / Anki 词库 | `导出/生词/` |
@@ -56,6 +57,27 @@ Kindle 桥在你本机开一个小服务，用数据线连上 Kindle 后，把�
 
 TXT 会自动嗅探编码（UTF-8 / GB18030 / Big5），不用先转码。
 EPUB 转换**只动文本节点**，标签、样式、脚本、图片、字体一律原样，产出仍是结构合法的容器。
+
+### 本地语音合成（朗读 · Coqui TTS）
+
+「朗读」页把文字在本机合成成语音，**完全离线、不上传任何内容**。引擎用
+[Coqui TTS](https://github.com/coqui-ai/TTS)（Mozilla Public License 2.0，PyTorch 实现）：
+
+- **中文**：Baker / Tacotron2 模型（普通话女声），约 50 MB；另有 Baker-DCA 变体。
+- **多语**：YourTTS，支持中文（zh-cn）且可换说话人，约 120 MB。
+- **英文**：LJSpeech 女声，约 40 MB。
+
+用法：在「朗读」页把文字贴进文本框（或到「标注」页点任意一条里的 🔊 按钮，
+把那段划线直接读出来），选好声音，点「生成并播放」；也能「下载 WAV」。
+
+声音模型**不在仓库里**，首次用某个声音时由 Coqui 自动下载并缓存到本机
+`~/.local/share/tts`，之后不用再下。
+
+> 这是**可选功能**：核心程序不依赖它。要用「朗读」，先装：
+> ```bash
+> pip install -r requirements-tts.txt      # 需 Python 3.9~3.11
+> ```
+> 重启 Kindle 桥即可。「朗读」页在没装 TTS 时会明确提示怎么装，不影响其它功能。
 
 ## 快速开始
 
@@ -115,10 +137,15 @@ python app.py --port 8765 --host 127.0.0.1 --no-browser
 ```
 kindle-bridge/
 ├── app.py                  # 主服务（标准库 http.server，无 Web 框架）
+├── requirements.txt        # 核心依赖（仅 OpenCC）
+├── requirements-tts.txt    # 可选：本地语音合成（Coqui TTS，需 Python 3.9~3.11）
+├── Kindle桥.spec           # 打包成单文件 exe（核心功能）
+├── Kindle桥-tts.spec       # 可选：把 TTS 也打进 exe 的全内置变体
 ├── kindle/                 # 各功能模块
 │   ├── paths.py            # 资源目录 / 数据目录分离（为单文件 exe 准备）
 │   ├── hanzi.py            # 简繁转换内核（OpenCC + 异体补丁 + 短语保护）
 │   ├── epub.py             # EPUB 容器读写、简繁转换、EPUB 体检
+│   ├── tts.py              # 本地语音合成封装（Coqui TTS，可选功能）
 │   ├── zhconv_file.py      # 文件级转换入口（EPUB / TXT）
 │   ├── device.py           # Kindle USB 设备识别（ctypes 直连）
 │   ├── clippings.py        # My Clippings.txt 解析
@@ -204,6 +231,12 @@ pyinstaller Kindle桥.spec
 产物在 `dist/`。冻结后只读资源（`web/`、`kindle/data/`）走解包目录，
 用户数据（`收书/`、`导出/`、`工具/`）落在 **exe 旁边** —— 这条分界由 `kindle/paths.py` 统一管理。
 
+想要一个**连 TTS 都不用装**的朗读版，用另一个 spec（体积几百 MB 起，需 Python 3.9~3.11）：
+
+```bash
+pyinstaller "Kindle桥-tts.spec"
+```
+
 ## 设计取向
 
 - **本地优先**：没有账号、没有云、没有遥测。数据不出机器。
@@ -236,3 +269,8 @@ pyinstaller Kindle桥.spec
 - **需要连着 Kindle**：书库、投递这些功能要求设备已连接并被系统挂载。
 - 简繁转换的繁体输出采用**台湾正体**；需要港标或大陆正体请自行改 `kindle/hanzi.py`
   里的 `_CC_S2T` 配置（OpenCC 还提供 `s2t` / `s2hk` / `tw2sp` 等）。
+- **「朗读」TTS 需 Python 3.9~3.11**：Coqui TTS 依赖的 PyTorch 目前不支持 3.12+。
+  本机是更高版本时，请单独建一个 3.11 虚拟环境装 `requirements-tts.txt`。
+- **「朗读」不进微信小程序**：小程序跑在手机上，装不了 PyTorch；小程序里要语音
+  合成得走微信自己的同声传译插件。桌面端的 TTS 是给电脑上读标注、读段落用的。
+

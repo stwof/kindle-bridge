@@ -29,6 +29,7 @@
     <button class="tab active" data-tab="library">书库</button>
     <button class="tab" data-tab="epub">书籍投递</button>
     <button class="tab" data-tab="zh">简繁转换</button>
+    <button class="tab" data-tab="tts">朗读</button>
     <button class="tab" data-tab="free">公版书库</button>
     <button class="tab" data-tab="highlights">标注</button>
     <button class="tab" data-tab="vocab">生词</button>
@@ -70,6 +71,40 @@
       </div>
 
       <div id="zh-result"></div>
+    </section>
+
+    <section class="panel" id="panel-tts">
+      <div class="envcard">
+        <div class="env-head">
+          <span class="env-kicker">本地语音合成 · Coqui TTS 开源引擎（PyTorch）· 首次使用自动下载模型</span>
+          <span class="env-state" id="tts-state">检测中…</span>
+        </div>
+        <div class="free-note">
+          把要听的文字贴进来，<b>在本机用 Coqui TTS 合成语音</b>——不联网、不上传。
+          中文用 Baker 模型（普通话女声），也可选多语 YourTTS 或英文 LJSpeech。
+          首次点「生成」会先下载对应模型（约 50~120 MB，之后缓存在本机，不用再下）。
+          <b>没装 Coqui TTS 时这里会提示怎么装</b>，不影响其它功能。
+        </div>
+      </div>
+
+      <div class="tts-opts">
+        <label>声音：
+          <select id="tts-voice"><option value="">（加载中…）</option></select>
+        </label>
+        <label class="chk"><input type="checkbox" id="tts-autoscroll"> 生成后自动播放</label>
+      </div>
+
+      <textarea id="tts-text" class="tts-area" placeholder="粘贴或输入要朗读的文字……也可以到「标注」页，点任意一条里的 🔊 按钮，把那段划线读出来。"></textarea>
+
+      <div class="actions" style="margin:10px 0 6px">
+        <button id="tts-gen" class="primary">生成并播放</button>
+        <button id="tts-download" class="ghost">下载 WAV</button>
+        <button id="tts-paste" class="ghost">从剪贴板粘贴</button>
+        <button id="tts-clear" class="ghost">清空</button>
+        <span id="tts-status" class="hint"></span>
+      </div>
+
+      <div id="tts-result"></div>
     </section>
 
     <section class="panel active" id="panel-library">

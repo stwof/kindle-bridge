@@ -46,6 +46,7 @@ from kindle import library as lib_mod             # noqa: E402
 from kindle import vocab as vocab_mod             # noqa: E402
 from kindle import zhconv_file as zcf_mod          # noqa: E402
 from kindle import hanzi as hanzi_mod               # noqa: E402
+from kindle import tts as tts_mod                   # noqa: E402
 
 # 「收书」接受的输入：EPUB 需要转换投递；MOBI 家族设备原生可读，零转换直投
 INBOX_EXTS = (".epub", ".mobi", ".azw", ".azw3", ".prc")
@@ -200,6 +201,8 @@ class Handler(BaseHTTPRequestHandler):
                 "device": data["device"], "calibre": data["calibre"],
                 "zhconv": {"backend": hanzi_mod.backend(),
                            "available": hanzi_mod.available()},
+                "tts": {"backend": tts_mod.backend(),
+                        "available": tts_mod.available()},
             })
         if path == "/api/data":
             q = urlparse(self.path).query
@@ -222,6 +225,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(deliv_mod.device_duplicates(dev.documents if dev else ""))
         if path == "/api/classics/state":
             return self._json(cls_mod.status())
+        if path == "/api/tts/voices":
+            return self._json(tts_mod.list_voices())
         return self._static(path.lstrip("/"))
 
     def do_HEAD(self):
@@ -331,6 +336,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": "拒绝跨站请求"}, 403)
             return self._classics_build(payload)
 
+        if path == "/api/tts":
+            if not self._same_origin():
+                return self._json({"error": "拒绝跨站请求"}, 403)
+            return self._tts_synth(payload)
+
         return self._json({"error": "not found"}, 404)
 
     def _classics_build(self, payload: dict):
@@ -399,6 +409,42 @@ class Handler(BaseHTTPRequestHandler):
                 "out": ps.out if ps else "",
             }
         return self._json(out)
+
+    # ---------- 本地语音合成（Coqui TTS） ----------
+    def _tts_synth(self, payload: dict):
+        """把文字合成成语音，返回 WAV 字节。
+
+        模型在首次使用某个声音时由 Coqui 自动下载（约 50~120 MB），之后缓存本地。
+        没装 TTS 时返回清晰的安装提示，而不是 500。
+        """
+        if not tts_mod.available():
+            return self._json({
+                "error": "未安装 Coqui TTS。请先 pip install -r requirements-tts.txt "
+                         "（需要 Python 3.9~3.11），然后重启本服务。",
+            }, 400)
+
+        text = (payload.get("text") or "").strip()
+        if not text:
+            return self._json({"error": "没有可朗读的文字"}, 400)
+        if len(text) > 20000:
+            return self._json({"error": "单次文字过长（上限 20000 字），请分段"}, 413)
+
+        voice = payload.get("voice") or None
+        try:
+            info = tts_mod.synth(text, voice=voice)
+        except tts_mod.TTSSError as ex:
+            return self._json({"error": str(ex)}, 400)
+        except Exception as ex:                    # noqa: BLE001
+            return self._json({"error": f"语音合成失败：{ex}"}, 500)
+
+        meta = {k: v for k, v in info.items() if k != "bytes"}
+        from urllib.parse import quote
+        fname = f"kindle-bridge-tts-{meta.get('voice', 'out')}.wav"
+        self._send(200, info["bytes"], "audio/wav", {
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(fname)}",
+            "X-Tts-Meta": base64.urlsafe_b64encode(
+                json.dumps(meta, ensure_ascii=False).encode("utf-8")).decode("ascii"),
+        })
 
     def _books_export(self, payload: dict):
         data = collect()

@@ -193,6 +193,10 @@
           it.location ? `位置 ${it.location}` : '',
           it.added_at || '',
         ].filter(Boolean).join(' · ');
+        const speak = el('button', 'tts-clip', '🔊');
+        speak.title = '用语音读出来';
+        speak.addEventListener('click', (e) => { e.stopPropagation(); ttsFromText(it.text); });
+        c.appendChild(speak);
         c.appendChild(el('div', 'txt', esc(it.text || '（无内容）')));
         c.appendChild(el('div', 'meta', esc(meta)));
         body.appendChild(c);
@@ -1337,6 +1341,7 @@
           freePollOnce();
           if (!FREE.data) freeSearch(1);
         }
+        if (t.dataset.tab === 'tts') ttsLoad();
       });
     });
 
@@ -1426,6 +1431,21 @@
       e.target.value = '';
     });
 
+    // 本地语音合成（TTS）
+    $('#tts-gen').addEventListener('click', () => ttsGenerate(true));
+    $('#tts-download').addEventListener('click', () => ttsGenerate(false, true));
+    $('#tts-paste').addEventListener('click', async () => {
+      try {
+        const txt = await navigator.clipboard.readText();
+        if (txt) { $('#tts-text').value = txt; toast('已粘贴剪贴板内容'); }
+      } catch (e) { toast('无法读取剪贴板，请手动粘贴（Ctrl+V）'); }
+    });
+    $('#tts-clear').addEventListener('click', () => {
+      $('#tts-text').value = '';
+      $('#tts-result').innerHTML = '';
+      $('#tts-status').textContent = '';
+    });
+
     // 公版书库
     renderFreeChips();
     $('#free-go').addEventListener('click', () => freeSearch(1));
@@ -1433,6 +1453,96 @@
     $('#free-source').addEventListener('change', () => freeSearch(1));
     $('#free-lang').addEventListener('change', () => freeSearch(1));
     $('#free-cover').addEventListener('change', renderFree);
+  }
+
+  /* ---------- 本地语音合成（TTS · Coqui TTS） ---------- */
+  let _ttsBusy = false;
+
+  async function ttsLoad() {
+    const sel = $('#tts-voice');
+    const state = $('#tts-state');
+    try {
+      const list = await (await api('/api/tts/voices')).json();
+      sel.innerHTML = '';
+      (list || []).forEach((v) => {
+        const o = el('option', null, v.label + (v.ready ? '（已下载）' : ''));
+        o.value = v.id;
+        if (v.default) o.selected = true;
+        sel.appendChild(o);
+      });
+      const st = await (await api('/api/status')).json();
+      const ok = !!(st && st.tts && st.tts.available);
+      state.textContent = ok ? '就绪' : '未安装 TTS';
+      state.style.color = ok ? '' : 'var(--red)';
+      state.style.fontWeight = ok ? '' : '500';
+    } catch (e) {
+      state.textContent = '检测失败';
+    }
+  }
+
+  function _b64utf8(s) {
+    const std = (s || '').replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(std);
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+
+  async function ttsGenerate(play, download) {
+    if (_ttsBusy) return;
+    const text = $('#tts-text').value.trim();
+    if (!text) { toast('请先输入要朗读的文字'); return; }
+    const btn = $('#tts-gen');
+    _ttsBusy = true;
+    btn.disabled = true;
+    const old = btn.textContent;
+    $('#tts-status').textContent = '合成中…（首次使用需先下载模型，可能要一两分钟）';
+    const box = $('#tts-result');
+    try {
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice: $('#tts-voice').value || undefined }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || (`${res.status} ${res.statusText}`));
+      }
+      const blob = await res.blob();
+      let meta = {};
+      const mh = res.headers.get('X-Tts-Meta');
+      if (mh) { try { meta = JSON.parse(_b64utf8(mh)); } catch (e) { /* ignore */ } }
+      const url = URL.createObjectURL(blob);
+      const dur = meta.duration ? `（约 ${meta.duration} 秒，分 ${meta.chunks || '?'} 段）` : '';
+      box.innerHTML = `<audio id="tts-audio" controls src="${url}"></audio>`
+        + `<div class="hint" style="margin-top:6px">已生成 WAV${dur} · 大小 ${fmtSize(blob.size)}</div>`;
+      $('#tts-status').textContent = '完成';
+      if (play || $('#tts-autoscroll').checked) {
+        const a = $('#tts-audio');
+        if (a) a.play().catch(() => {});
+      }
+      if (download) {
+        const a = el('a');
+        a.href = url; a.download = 'kindle-bridge-tts.wav';
+        document.body.appendChild(a); a.click(); a.remove();
+      }
+    } catch (e) {
+      $('#tts-status').textContent = '失败';
+      box.innerHTML = `<div class="hint" style="color:var(--red)">${esc(e.message)}</div>`;
+      toast('合成失败：' + e.message);
+    } finally {
+      _ttsBusy = false;
+      btn.disabled = false;
+      btn.textContent = old;
+    }
+  }
+
+  async function ttsFromText(text) {
+    if (!text) return;
+    $('#tts-text').value = text;
+    const tab = document.querySelector('.tab[data-tab="tts"]');
+    if (tab) tab.click();
+    await ttsLoad();
+    await ttsGenerate(true);
   }
 
   async function load(force) {

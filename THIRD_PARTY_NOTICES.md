@@ -11,7 +11,23 @@
 | [opencc-python-reimplemented](https://pypi.org/project/opencc-python-reimplemented/) | OpenCC 的纯 Python 移植（桌面端唯一第三方依赖） | MIT | 由 `pip install -r requirements.txt` 安装 |
 | [fflate](https://github.com/101arrowz/fflate) | 小程序端 EPUB 的 zip 读写 | MIT | `miniprogram/vendor/fflate.js` |
 
+## 可选功能依赖（pip 安装，不随包分发）
+
+| 组件 | 用途 | 许可 | 获取方式 |
+|---|---|---|---|
+| [Coqui TTS](https://github.com/coqui-ai/TTS) | 「朗读」页的本地语音合成引擎（PyTorch 实现） | MPL-2.0 | `pip install -r requirements-tts.txt`（需 Python 3.9~3.11） |
+| [PyTorch](https://github.com/pytorch/pytorch) | Coqui TTS 的深度学习框架 | BSD-3-Clause | 随 `TTS` 一并安装 |
+
+> 「朗读」是**可选功能**：核心程序不依赖它，仓库里也不打包它的代码与模型。
+> 语音模型（Baker / YourTTS / LJSpeech 等）在用户首次使用时由 Coqui 自动下载，
+> 各自遵循其原有许可（多为 CC / 研究用途许可，详见 Coqui 官方模型卡），请按需合规使用。
+> 模型文件默认缓存在本机 `~/.local/share/tts`，本项目不托管、不分发任何模型权重。
+
 许可证原文：
+- Coqui TTS：<https://github.com/coqui-ai/TTS/blob/main/LICENSE.txt>
+- PyTorch：<https://github.com/pytorch/pytorch/blob/main/LICENSE>
+
+
 - OpenCC / opencc-js：`miniprogram/vendor/LICENSES/opencc-js-LICENSE.txt`
 - opencc-js 的第三方许可汇总：`miniprogram/vendor/LICENSES/opencc-js-THIRD_PARTY_LICENSES.md`
 - fflate：`miniprogram/vendor/LICENSES/fflate-LICENSE.txt`
