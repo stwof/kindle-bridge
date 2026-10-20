@@ -1342,6 +1342,7 @@
           if (!FREE.data) freeSearch(1);
         }
         if (t.dataset.tab === 'tts') ttsLoad();
+        if (t.dataset.tab === 'reader') readerLoad();
       });
     });
 
@@ -1453,6 +1454,9 @@
     $('#free-source').addEventListener('change', () => freeSearch(1));
     $('#free-lang').addEventListener('change', () => freeSearch(1));
     $('#free-cover').addEventListener('change', renderFree);
+
+    // 本地阅读器
+    readerBindControls();
   }
 
   /* ---------- 本地语音合成（TTS · Coqui TTS） ---------- */
@@ -1543,6 +1547,468 @@
     if (tab) tab.click();
     await ttsLoad();
     await ttsGenerate(true);
+  }
+
+  /* ---------- 本地阅读器 ---------- */
+  // RD_PREFS: 字号/行距/页宽/主题/排版，存 localStorage；书本进度与标注存后端 JSON
+  const RD_KEY = 'kb-reader-prefs';
+  let RD_LIST = [];
+  const RD = {
+    key: null, meta: null, book: null, rendition: null, toc: [],
+    chapter: '', percent: 0, cfi: '', sel: null, saving: 0,
+  };
+
+  const _rdPrefs = () => {
+    try { return JSON.parse(localStorage.getItem(RD_KEY)) || {}; } catch (e) { return {}; }
+  };
+  const _rdSavePrefs = (p) => {
+    try { localStorage.setItem(RD_KEY, JSON.stringify(p)); } catch (e) { /* 隐私模式会失败，忽略 */ }
+  };
+
+  function _rdThemeCss(prefs) {
+    const fam = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei",Georgia,serif';
+    const lh = String((prefs && prefs.lineHeight) || 1.7);
+    const base = (bg, fg, link) => ({
+      body: { background: bg, color: fg, 'font-family': fam, 'line-height': lh, padding: '2px 4px' },
+      ...(link ? { a: { color: link } } : {}),
+    });
+    return {
+      light: base('#fbfbf9', '#1c1c1a', '#1d9e75'),
+      sepia: base('#f6ecd9', '#4a3f30', '#8a6d2f'),
+      dark: base('#1b1b19', '#d8d6d0', '#4fc79f'),
+    };
+  }
+
+  async function readerLoad() {
+    const st = $('#reader-state');
+    st.textContent = '读取中…';
+    try {
+      const list = await (await api('/api/reader/shelf')).json();
+      RD_LIST = list || [];
+      renderShelf(RD_LIST);
+      st.textContent = `共 ${RD_LIST.length} 本`;
+    } catch (e) {
+      st.textContent = '读取失败：' + e.message;
+    }
+  }
+
+  function renderShelf(list) {
+    const wrap = $('#reader-shelf');
+    wrap.innerHTML = '';
+    const q = ($('#reader-q').value || '').trim().toLowerCase();
+    const items = (list || []).filter((b) => !q
+      || (b.title || '').toLowerCase().includes(q)
+      || (b.author || '').toLowerCase().includes(q));
+    if (!items.length) {
+      wrap.appendChild(el('div', 'empty',
+        '没有可读的书。把 EPUB / TXT 放进「收书」文件夹，或用「公版书库」取一本，连上 Kindle 也会出现在这里。'));
+      return;
+    }
+    for (const b of items) {
+      const card = el('div', 'shelf-card');
+      card.title = `${b.title || ''}${b.author ? ' · ' + b.author : ''}`;
+
+      const cov = el('div', 'sc-cover');
+      cov.appendChild(el('div', 'sc-letter', esc((b.title || '?').trim().slice(0, 1))));
+      const img = el('img');
+      img.loading = 'lazy';
+      img.alt = '';
+      img.style.display = 'none';
+      img.onload = () => { img.style.display = 'block'; };
+      img.onerror = () => img.remove();
+      img.src = `/api/reader/cover?key=${encodeURIComponent(b.key)}`;
+      cov.appendChild(img);
+
+      const t = el('div', 'sc-title', esc(b.title || b.name || ''));
+      const a = el('div', 'sc-author', esc(b.author || ''));
+      const foot = el('div', 'sc-foot');
+      foot.appendChild(el('span', 'sc-ext', esc((b.ext || '').replace('.', '').toUpperCase())));
+      if (b.source) foot.appendChild(el('span', 'sc-src', esc(b.source)));
+      if (b.needs_convert) {
+        foot.appendChild(el('span', 'sc-cvt', b.kind === 'mobi' ? '需转 EPUB' : '现场打包'));
+      }
+      card.appendChild(cov);
+      card.appendChild(t);
+      card.appendChild(a);
+      card.appendChild(foot);
+
+      const pct = b.last && b.last.percent ? Math.max(1, Math.round(b.last.percent * 100)) : 0;
+      if (pct) card.appendChild(el('div', 'sc-bar', `<i style="width:${pct}%"></i>`));
+
+      card.addEventListener('click', () => readerOpen(b.key));
+      wrap.appendChild(card);
+    }
+  }
+
+  async function readerOpen(key) {
+    let meta;
+    try {
+      meta = await (await api('/api/reader/meta?key=' + encodeURIComponent(key))).json();
+    } catch (e) {
+      return toast('读取失败：' + e.message);
+    }
+    if (!meta.ok) return toast(meta.error || '打不开这本书');
+
+    RD.key = key;
+    RD.meta = meta;
+    if (meta.drm) toast(meta.warning || '这本书带 DRM，可能读不出来');
+
+    $('#rd-title').textContent = `${meta.title}${meta.author ? ' · ' + meta.author : ''}`;
+    $('#reader-overlay').hidden = false;
+    document.body.classList.add('rd-open');
+    readerCloseDrawers();
+    readerRenderNotes(meta.annotations || []);
+
+    const note = meta.needs_convert
+      ? (meta.converter === 'calibre' ? '正在用 Calibre 转换，首次可能要几秒…'
+        : '正在打包成 EPUB…')
+      : '正在打开…';
+    $('#rd-loading-text').textContent = note;
+    $('#rd-loading').classList.add('show');
+
+    // 腾出舞台（保留 loading 那一个节点）
+    const stage = $('#rd-stage');
+    [...stage.children].forEach((c) => { if (c.id !== 'rd-loading') c.remove(); });
+
+    const prefs = _rdPrefs();
+    try {
+      if (typeof ePub !== 'function') {
+        $('#rd-loading').classList.remove('show');
+        return toast('阅读器组件还没加载好（epub.js），刷新页面再试');
+      }
+      const book = ePub(meta.epub_url);
+      RD.book = book;
+      const rendition = book.renderTo('rd-stage', {
+        method: prefs.flow === 'scrolled' ? 'continuous' : 'default',
+        flow: prefs.flow === 'scrolled' ? 'scrolled-doc' : 'paginated',
+        width: Math.max(240, stage.clientWidth - 24),
+        height: Math.max(200, stage.clientHeight - 10),
+        allowScriptedContent: false,
+        allowPopups: false,
+      });
+      RD.rendition = rendition;
+      readerApplyPrefs(true);
+      // 划线的样式：epub.js 把正文渲染在 iframe 里，主题样式管不到它，
+      // 用官方提供的 content 钩子把样式注进正文文档（class: rd-hl）
+      rendition.hooks.content.register((contents) => {
+        const doc = contents && contents.document;
+        if (!doc || !doc.head) return;
+        const style = doc.createElement('style');
+        style.textContent = '.rd-hl{background:rgba(255,213,79,.45);border-radius:2px;'
+          + 'padding:0 1px;box-decoration-break:clone;-webkit-box-decoration-break:clone}'
+          + '.rd-dark .rd-hl{background:rgba(255,213,79,.32)}';
+        doc.head.appendChild(style);
+      });
+      rendition.on('relocated', readerOnRelocated);
+      rendition.on('selected', readerOnSelected);
+
+      const nav = await book.loaded.navigation;
+      RD.toc = (nav && nav.toc) || [];
+      readerRenderToc(RD.toc);
+
+      try { await book.locations.generate(1200); } catch (e) { /* 没有 locations 也能读，只是没百分比 */ }
+
+      const last = (meta.last && meta.last.cfi) ? meta.last.cfi : null;
+      await rendition.display(last || undefined);
+      await rendition.display(last || undefined);   // 再显示一次，避免 cfi 还没就绪导致空页
+
+      // 把以前存的划线重新画上
+      for (const a of (meta.annotations || [])) {
+        if (!a.cfi) continue;
+        try { rendition.annotations.add('highlight', a.cfi, null, null, 'rd-hl'); } catch (e) { /* 失效的 cfi 跳过 */ }
+      }
+      $('#rd-loading').classList.remove('show');
+    } catch (e) {
+      $('#rd-loading').classList.remove('show');
+      toast('打开失败：' + e.message);
+    }
+  }
+
+  function readerApplyPrefs(initial) {
+    const prefs = _rdPrefs();
+    if (!RD.rendition) return;
+    const css = _rdThemeCss(prefs);
+    try {
+      RD.rendition.themes.register('light', css.light);
+      RD.rendition.themes.register('sepia', css.sepia);
+      RD.rendition.themes.register('dark', css.dark);
+      RD.rendition.themes.register('kb', css.light);
+      RD.rendition.themes.fontSize((prefs.fontSize || 100) + '%');
+      RD.rendition.themes.select(prefs.theme || 'light');
+    } catch (e) { /* 主题是锦上添花，出错不拦着读书 */ }
+
+    const stage = $('#rd-stage');
+    stage.style.maxWidth = prefs.width ? (prefs.width + 'px') : '';
+    try {
+      RD.rendition.resize(Math.max(240, stage.clientWidth), Math.max(200, stage.clientHeight));
+    } catch (e) { /* ignore */ }
+
+    if (!initial) {
+      // 排版（翻页/滚动）要重建渲染器，提示重开
+      if (prefs.flowChanged) {
+        prefs.flowChanged = false;
+        _rdSavePrefs(prefs);
+        toast('排版切换会在下次打开这本书时生效');
+      }
+    }
+  }
+
+  function readerOnRelocated(loc) {
+    const s = loc && loc.start;
+    if (!s) return;
+    RD.cfi = s.cfi || '';
+    let pct = 0;
+    try {
+      if (RD.book && RD.book.locations && RD.book.locations.length) {
+        pct = RD.book.locations.percentageFromCfi(RD.cfi);
+      }
+    } catch (e) { pct = 0; }
+    RD.percent = pct || 0;
+    $('#rd-pct').textContent = Math.round(RD.percent * 100) + '%';
+    $('#rd-slider').value = String(Math.round(RD.percent * 1000));
+    const href = (s.href || '').split('#')[0];
+    const hit = (RD.toc || []).find((t) => t && t.href && t.href.split('#')[0] === href);
+    RD.chapter = hit ? (hit.label || '') : '';
+    readerSaveProgress();
+  }
+
+  function readerSaveProgress(flush) {
+    if (!RD.key) return;
+    const send = () => {
+      fetch('/api/reader/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: RD.key, cfi: RD.cfi, percent: RD.percent, chapter: RD.chapter }),
+      }).catch(() => { /* 进度丢了不打扰用户 */ });
+    };
+    clearTimeout(RD.saving);
+    if (flush) send();
+    else RD.saving = setTimeout(send, 1200);
+  }
+
+  function readerOnSelected(cfiRange, contents) {
+    let text = '';
+    try {
+      const r = contents && contents.range && contents.range(cfiRange);
+      text = (r && r.toString()) || '';
+    } catch (e) { text = ''; }
+    RD.sel = { cfiRange, text };
+    $('#rd-selbar').hidden = false;
+  }
+
+  async function readerSelHighlight() {
+    if (!RD.sel || !RD.rendition) return;
+    const { cfiRange, text } = RD.sel;
+    try { RD.rendition.annotations.add('highlight', cfiRange, null, null, 'rd-hl'); } catch (e) { /* ignore */ }
+    $('#rd-selbar').hidden = true;
+    RD.sel = null;
+    try {
+      const res = await (await api('/api/reader/annotations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: RD.key, text, cfi: cfiRange, chapter: RD.chapter }),
+      })).json();
+      if (res.ok) {
+        RD.meta.annotations = [res.item, ...(RD.meta.annotations || [])];
+        readerRenderNotes(RD.meta.annotations);
+        toast('已划线保存');
+      } else {
+        toast(res.error || '保存失败');
+      }
+    } catch (e) {
+      toast('保存失败：' + e.message);
+    }
+  }
+
+  function readerSelCopy() {
+    if (!RD.sel || !RD.sel.text) return;
+    const ta = el('textarea');
+    ta.value = RD.sel.text;
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); toast('已复制'); } catch (e) { toast('复制失败，请手动选'); }
+    ta.remove();
+  }
+
+  function readerRenderToc(toc) {
+    const box = $('#rd-toc-list');
+    box.innerHTML = '';
+    if (!toc || !toc.length) {
+      box.appendChild(el('div', 'empty', '这本书没有目录'));
+      return;
+    }
+    for (const t of toc) {
+      const b = el('button', 'rd-toc-item', esc(t.label || '(无题)'));
+      b.addEventListener('click', () => readerJump(t.href));
+      box.appendChild(b);
+    }
+  }
+
+  function readerRenderNotes(list) {
+    const box = $('#rd-notes-list');
+    box.innerHTML = '';
+    if (!list || !list.length) {
+      box.appendChild(el('div', 'empty', '还没有标注。在正文里选中文字，点「划线并保存」。'));
+      return;
+    }
+    for (const a of list) {
+      const item = el('div', 'rd-note');
+      item.appendChild(el('div', 'rd-note-text', esc(a.text || '')));
+      const foot = el('div', 'rd-note-foot');
+      const when = a.at ? new Date(a.at * 1000).toLocaleDateString() : '';
+      foot.appendChild(el('span', 'hint', esc([when, a.chapter].filter(Boolean).join(' · '))));
+      const go = el('button', 'ghost', '跳转');
+      go.addEventListener('click', () => readerJump(a.cfi));
+      const del = el('button', 'ghost', '删除');
+      del.addEventListener('click', () => readerAnnotRemove(a.id));
+      foot.appendChild(go);
+      foot.appendChild(del);
+      item.appendChild(foot);
+      box.appendChild(item);
+    }
+  }
+
+  async function readerAnnotRemove(id) {
+    try {
+      await api('/api/reader/annotations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove', key: RD.key, id }),
+      });
+    } catch (e) { /* 后端删失败也先把界面抹掉 */ }
+    const a = (RD.meta.annotations || []).find((x) => x.id === id);
+    if (a && a.cfi) {
+      try { RD.rendition.annotations.remove(a.cfi, 'highlight'); } catch (e) { /* ignore */ }
+    }
+    RD.meta.annotations = (RD.meta.annotations || []).filter((x) => x.id !== id);
+    readerRenderNotes(RD.meta.annotations);
+  }
+
+  async function readerJump(target) {
+    if (!RD.rendition || !target) return;
+    try { await RD.rendition.display(target); } catch (e) { toast('跳转失败'); }
+  }
+
+  function readerCloseDrawers() {
+    ['#rd-toc-drawer', '#rd-notes-drawer', '#rd-settings-panel'].forEach((s) => {
+      const n = $(s);
+      if (n) n.hidden = true;
+    });
+  }
+
+  function readerToggleDrawer(sel) {
+    const node = $(sel);
+    const willOpen = node.hidden;
+    readerCloseDrawers();
+    node.hidden = !willOpen;
+  }
+
+  function readerClose() {
+    readerSaveProgress(true);
+    $('#reader-overlay').hidden = true;
+    document.body.classList.remove('rd-open');
+    readerCloseDrawers();
+    $('#rd-selbar').hidden = true;
+    try { RD.book && RD.book.destroy && RD.book.destroy(); } catch (e) { /* ignore */ }
+    RD.book = null;
+    RD.rendition = null;
+    RD.key = null;
+    RD.meta = null;
+    const stage = $('#rd-stage');
+    [...stage.children].forEach((c) => { if (c.id !== 'rd-loading') c.remove(); });
+    $('#rd-loading').classList.remove('show');
+    $('#rd-pct').textContent = '0%';
+    $('#rd-slider').value = '0';
+  }
+
+  function readerBindControls() {
+    $('#reader-refresh').addEventListener('click', readerLoad);
+    $('#reader-q').addEventListener('input', () => renderShelf(RD_LIST));
+
+    $('#rd-back').addEventListener('click', readerClose);
+    $('#rd-prev').addEventListener('click', () => RD.rendition && RD.rendition.prev());
+    $('#rd-next').addEventListener('click', () => RD.rendition && RD.rendition.next());
+    $('#rd-toc').addEventListener('click', () => readerToggleDrawer('#rd-toc-drawer'));
+    $('#rd-notes').addEventListener('click', () => readerToggleDrawer('#rd-notes-drawer'));
+    $('#rd-settings').addEventListener('click', () => readerToggleDrawer('#rd-settings-panel'));
+    $('#rd-toc-close').addEventListener('click', () => { $('#rd-toc-drawer').hidden = true; });
+    $('#rd-notes-close').addEventListener('click', () => { $('#rd-notes-drawer').hidden = true; });
+    $('#rd-settings-close').addEventListener('click', () => { $('#rd-settings-panel').hidden = true; });
+    $('#rd-sel-hl').addEventListener('click', readerSelHighlight);
+    $('#rd-sel-copy').addEventListener('click', readerSelCopy);
+
+    $('#rd-slider').addEventListener('change', () => {
+      if (!RD.book || !RD.book.locations || !RD.book.locations.length) return;
+      const p = (+$('#rd-slider').value) / 1000;
+      try {
+        const cfi = RD.book.locations.cfiFromPercentage(p);
+        readerJump(cfi);
+      } catch (e) { /* 定位没建好就忽略 */ }
+    });
+
+    // 设置项：点一下立即生效并记住
+    const bindSeg = (sel, prop, kind) => {
+      const box = $(sel);
+      if (!box) return;
+      box.addEventListener('click', (e) => {
+        const btn = e.target.closest('button');
+        if (!btn) return;
+        [...box.children].forEach((b) => b.classList.toggle('on', b === btn));
+        const prefs = _rdPrefs();
+        if (prop === 'flow') {
+          const changed = (prefs.flow || 'paginated') !== btn.dataset.v;
+          prefs.flow = btn.dataset.v;
+          prefs.flowChanged = changed;
+        } else if (kind === 'num') {
+          prefs[prop] = +btn.dataset.v;
+        } else {
+          prefs[prop] = btn.dataset.v;
+        }
+        _rdSavePrefs(prefs);
+        readerApplyPrefs(false);
+      });
+    };
+    bindSeg('#rd-size', 'fontSize', 'str');
+    bindSeg('#rd-line', 'lineHeight', 'num');
+    bindSeg('#rd-width', 'width', 'num');
+    bindSeg('#rd-theme', 'theme', 'str');
+    bindSeg('#rd-flow', 'flow', 'str');
+
+    // 设置面板打开时把当前偏好同步到按钮高亮
+    const syncSeg = (sel, val) => {
+      const box = $(sel);
+      if (!box) return;
+      [...box.children].forEach((b) => b.classList.toggle('on', String(b.dataset.v) === String(val)));
+    };
+    $('#rd-settings').addEventListener('click', () => {
+      const p = _rdPrefs();
+      syncSeg('#rd-size', p.fontSize || 100);
+      syncSeg('#rd-line', p.lineHeight || 1.7);
+      syncSeg('#rd-width', p.width || 0);
+      syncSeg('#rd-theme', p.theme || 'light');
+      syncSeg('#rd-flow', p.flow || 'paginated');
+    });
+
+    // 键盘：左右翻页、Esc 退出
+    document.addEventListener('keydown', (e) => {
+      if ($('#reader-overlay').hidden) return;
+      if (e.key === 'Escape') { readerClose(); }
+      else if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); RD.rendition && RD.rendition.next(); }
+      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); RD.rendition && RD.rendition.prev(); }
+    });
+
+    let rzTimer = 0;
+    window.addEventListener('resize', () => {
+      if (!RD.rendition || $('#reader-overlay').hidden) return;
+      clearTimeout(rzTimer);
+      rzTimer = setTimeout(() => {
+        const stage = $('#rd-stage');
+        try {
+          RD.rendition.resize(Math.max(240, stage.clientWidth), Math.max(200, stage.clientHeight));
+        } catch (e) { /* ignore */ }
+      }, 150);
+    });
   }
 
   async function load(force) {

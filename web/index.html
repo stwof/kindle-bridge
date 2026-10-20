@@ -29,6 +29,7 @@
     <button class="tab active" data-tab="library">书库</button>
     <button class="tab" data-tab="epub">书籍投递</button>
     <button class="tab" data-tab="zh">简繁转换</button>
+    <button class="tab" data-tab="reader">阅读器</button>
     <button class="tab" data-tab="tts">朗读</button>
     <button class="tab" data-tab="free">公版书库</button>
     <button class="tab" data-tab="highlights">标注</button>
@@ -105,6 +106,31 @@
       </div>
 
       <div id="tts-result"></div>
+    </section>
+
+    <section class="panel" id="panel-reader">
+      <div class="envcard">
+        <div class="env-head">
+          <span class="env-kicker">本地阅读器 · epub.js 渲染 · 数据不出机器</span>
+          <span class="env-state" id="reader-state">检测中…</span>
+        </div>
+        <div class="free-note">
+          书架自动收拢 <b>收书/</b>、<b>导出/</b> 下的书，以及连着的 Kindle 里的书。
+          <b>EPUB 直接读</b>；TXT 现场打包成 EPUB；MOBI/AZW3 交给本机
+          <b>Calibre</b> 转成 EPUB 后读（转一次就缓存，之后再开是秒开）。
+          阅读进度与划线标注存在 <code>书架/</code> 的两个 JSON 里，随时能打开看、能自己改。
+        </div>
+      </div>
+
+      <div class="panel-bar">
+        <div class="hint" id="reader-hint"></div>
+        <div class="actions">
+          <input id="reader-q" class="search" type="search" placeholder="搜书名或作者…">
+          <button id="reader-refresh" class="ghost">刷新书架</button>
+        </div>
+      </div>
+
+      <div class="shelf" id="reader-shelf"></div>
     </section>
 
     <section class="panel active" id="panel-library">
@@ -325,7 +351,86 @@
 
   <footer class="foot">Kindle 桥 · 本地运行，数据不出机器</footer>
 </div>
+
+<!-- 阅读器：全屏覆盖层，从「阅读器」标签页的书架点书进入 -->
+<div class="reader" id="reader-overlay" hidden>
+  <div class="rd-top">
+    <button id="rd-back" class="ghost">← 书架</button>
+    <div class="rd-title" id="rd-title"></div>
+    <div class="rd-top-actions">
+      <button id="rd-toc" class="ghost" title="目录">☰ 目录</button>
+      <button id="rd-notes" class="ghost" title="标注">✎ 标注</button>
+      <button id="rd-settings" class="ghost" title="阅读设置">Aa 设置</button>
+    </div>
+  </div>
+
+  <div class="rd-stage" id="rd-stage">
+    <div class="rd-loading" id="rd-loading">
+      <div class="rd-spin"></div>
+      <div id="rd-loading-text">正在准备这本书…</div>
+    </div>
+  </div>
+
+  <div class="rd-bottom">
+    <button id="rd-prev" class="ghost" title="上一页">‹ 上一页</button>
+    <input id="rd-slider" class="rd-slider" type="range" min="0" max="1000" value="0" title="拖动进度">
+    <button id="rd-next" class="ghost" title="下一页">下一页 ›</button>
+    <span id="rd-pct" class="hint">0%</span>
+  </div>
+
+  <!-- 选中文字后的浮动工具条 -->
+  <div class="rd-selbar" id="rd-selbar" hidden>
+    <button id="rd-sel-hl" class="primary">划线并保存</button>
+    <button id="rd-sel-copy" class="ghost">复制</button>
+  </div>
+
+  <aside class="rd-drawer" id="rd-toc-drawer" hidden>
+    <div class="rd-drawer-head"><b>目录</b><button id="rd-toc-close" class="ghost">收起</button></div>
+    <div class="rd-drawer-body" id="rd-toc-list"></div>
+  </aside>
+
+  <aside class="rd-drawer" id="rd-notes-drawer" hidden>
+    <div class="rd-drawer-head"><b>标注</b><button id="rd-notes-close" class="ghost">收起</button></div>
+    <div class="rd-drawer-body" id="rd-notes-list"></div>
+  </aside>
+
+  <aside class="rd-settings" id="rd-settings-panel" hidden>
+    <div class="rd-drawer-head"><b>阅读设置</b><button id="rd-settings-close" class="ghost">收起</button></div>
+    <div class="rd-drawer-body">
+      <div class="rd-set-row"><span>字体</span>
+        <div class="rd-seg" id="rd-size">
+          <button data-v="90">小</button><button data-v="100" class="on">中</button><button data-v="112">大</button><button data-v="128">特大</button>
+        </div>
+      </div>
+      <div class="rd-set-row"><span>行距</span>
+        <div class="rd-seg" id="rd-line">
+          <button data-v="1.4">紧</button><button data-v="1.7" class="on">中</button><button data-v="2.1">松</button>
+        </div>
+      </div>
+      <div class="rd-set-row"><span>页宽</span>
+        <div class="rd-seg" id="rd-width">
+          <button data-v="600">窄</button><button data-v="760" class="on">中</button><button data-v="0">宽</button>
+        </div>
+      </div>
+      <div class="rd-set-row"><span>主题</span>
+        <div class="rd-seg" id="rd-theme">
+          <button data-v="light" class="on">浅色</button><button data-v="sepia">护眼</button><button data-v="dark">深色</button>
+        </div>
+      </div>
+      <div class="rd-set-row"><span>排版</span>
+        <div class="rd-seg" id="rd-flow">
+          <button data-v="paginated" class="on">翻页</button><button data-v="scrolled">滚动</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>
+
 <div id="toast" class="toast"></div>
+<div id="toast" class="toast"></div>
+<!-- 顺序有讲究：JSZip 必须先于 epub.js（epub.js 依赖全局 JSZip 解 EPUB 压缩包） -->
+<script src="vendor/jszip.min.js"></script>
+<script src="vendor/epub.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -10,6 +10,15 @@
 | [OpenCC](https://github.com/BYVoid/OpenCC) (BYVoid) | 简繁转换字典与算法 | Apache-2.0 | 桌面端经 `opencc-python-reimplemented` 依赖引入；小程序端 `miniprogram/vendor/t2cn.js`、`miniprogram/pkg-trad/vendor/cn2t.js` |
 | [opencc-python-reimplemented](https://pypi.org/project/opencc-python-reimplemented/) | OpenCC 的纯 Python 移植（桌面端唯一第三方依赖） | MIT | 由 `pip install -r requirements.txt` 安装 |
 | [fflate](https://github.com/101arrowz/fflate) | 小程序端 EPUB 的 zip 读写 | MIT | `miniprogram/vendor/fflate.js` |
+| [epub.js](https://github.com/futurepress/epub.js) | 阅读器：在浏览器里渲染 EPUB | BSD-2-Clause（FreeBSD 式） | `web/vendor/epub.min.js` |
+| [JSZip](https://github.com/Stuk/jszip) | 阅读器：解 EPUB 的 zip 容器 | MIT（与 GPLv3 双许可，取 MIT） | `web/vendor/jszip.min.js` |
+
+许可证原文（随包部分）：
+- OpenCC / opencc-js：`miniprogram/vendor/LICENSES/opencc-js-LICENSE.txt`
+- opencc-js 的第三方许可汇总：`miniprogram/vendor/LICENSES/opencc-js-THIRD_PARTY_LICENSES.md`
+- fflate：`miniprogram/vendor/LICENSES/fflate-LICENSE.txt`
+- epub.js：`web/vendor/LICENSES/epubjs-LICENSE.txt`
+- JSZip：`web/vendor/LICENSES/jszip-LICENSE.txt`
 
 ## 可选功能依赖（pip 安装，不随包分发）
 
@@ -27,10 +36,11 @@
 - Coqui TTS：<https://github.com/coqui-ai/TTS/blob/main/LICENSE.txt>
 - PyTorch：<https://github.com/pytorch/pytorch/blob/main/LICENSE>
 
+## 外部工具（只调用命令行，不打包其代码）
 
-- OpenCC / opencc-js：`miniprogram/vendor/LICENSES/opencc-js-LICENSE.txt`
-- opencc-js 的第三方许可汇总：`miniprogram/vendor/LICENSES/opencc-js-THIRD_PARTY_LICENSES.md`
-- fflate：`miniprogram/vendor/LICENSES/fflate-LICENSE.txt`
+| 名称 | 用途 | 许可 | 说明 |
+|---|---|---|---|
+| [Calibre](https://calibre-ebook.com/) / `ebook-convert` | EPUB↔MOBI/AZW3 转换（阅读器读 MOBI、投递转 AZW3） | GPL-3.0 | 第三方独立软件。本项目只作为**独立进程**调用其命令行，不链接、不分发其代码，因此不改变本项目的 MIT 许可 |
 
 ## 需要时自行下载（不随包分发）
 
@@ -45,7 +55,6 @@
 |---|---|---|
 | [Project Gutenberg](https://www.gutenberg.org/) | 英文/外文公版书检索与取回 | 遵守其使用条款，仅限个人阅读 |
 | [Standard Ebooks](https://standardebooks.org/) | 精校公版书检索与取回 | GPL-3.0（其电子书内容多为公有领域） |
-| [Calibre](https://calibre-ebook.com/) | EPUB → AZW3 转换 | 第三方独立软件，本项目只调用其命令行，不改动其代码 |
 | 亚马逊 Send to Kindle | 官方云端投递 | 本项目只生成待发邮件或打开官方网页，不经手账号与密码 |
 
 ## 版权声明

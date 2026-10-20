@@ -27,6 +27,7 @@ Kindle 桥在你本机开一个小服务，用数据线连上 Kindle 后，把�
 | **书库** | 扫描 Kindle 上的书，筛出「微信读书不兼容」的，一键导出 | `导出/微信读书/` |
 | **书籍投递** | EPUB/MOBI/AZW3 投进设备，四条路线任选 | `收书/` → 设备 `documents/` |
 | **简繁转换** | EPUB / TXT 在**简体 ↔ 繁体**之间互转 | 下载或 `导出/简繁转换/` |
+| **阅读器** | 在本机直接读 EPUB / TXT / MOBI / AZW3，带目录、划线标注、进度记忆 | `书架/` |
 | **朗读** | 文字转语音（TTS），本地用 Coqui TTS 合成，不联网 | 浏览器内播放 / 下载 WAV |
 | **公版书库** | 检索并取回 Gutenberg / Standard Ebooks / 中文经典 | `收书/` |
 | **标注** | 解析 `My Clippings.txt`，导出笔记 | `导出/标注/` |
@@ -57,6 +58,24 @@ Kindle 桥在你本机开一个小服务，用数据线连上 Kindle 后，把�
 
 TXT 会自动嗅探编码（UTF-8 / GB18030 / Big5），不用先转码。
 EPUB 转换**只动文本节点**，标签、样式、脚本、图片、字体一律原样，产出仍是结构合法的容器。
+
+### 本地阅读器（epub.js + Calibre）
+
+「阅读器」页是一个**跑在本机的网页阅读器**：书架自动收拢 `收书/`、`导出/` 下的书，
+以及连着的 Kindle 里的书，点开就能读。
+
+- **EPUB**：用 [epub.js](https://github.com/futurepress/epub.js)（BSD 类许可）直接在浏览器里渲染，
+  不转格式、不落地副本。
+- **TXT**：现场打包成 EPUB（就是「简繁转换」那套 `build_epub`），零外部依赖。
+- **MOBI / AZW3 / AZW / PRC**：Kindle 原生读不了网页格式，交给本机
+  [Calibre](https://calibre-ebook.com/) 的 `ebook-convert` 转成 EPUB —— **转一次就缓存**
+  （`工具/缓存/阅读器/`），之后再开同一本书是秒开。没装 Calibre 会明确提示。
+
+阅读体验：目录、字体/行距/页宽/主题（浅色/护眼/深色）、翻页或滚动、键盘 ←→ 翻页、
+按进度条跳章、**记忆上次读到哪**；选中文字可划线保存。
+
+> 阅读进度记在 `书架/进度.json`，划线标注记在 `书架/标注.json` —— 都是普通 JSON，
+> 随时能打开看、能自己改、能备份。数据全程不联网。
 
 ### 本地语音合成（朗读 · Coqui TTS）
 
@@ -139,13 +158,14 @@ kindle-bridge/
 ├── app.py                  # 主服务（标准库 http.server，无 Web 框架）
 ├── requirements.txt        # 核心依赖（仅 OpenCC）
 ├── requirements-tts.txt    # 可选：本地语音合成（Coqui TTS，需 Python 3.9~3.11）
-├── Kindle桥.spec           # 打包成单文件 exe（核心功能）
+├── Kindle桥.spec           # 打包成单文件 exe（核心）
 ├── Kindle桥-tts.spec       # 可选：把 TTS 也打进 exe 的全内置变体
 ├── kindle/                 # 各功能模块
 │   ├── paths.py            # 资源目录 / 数据目录分离（为单文件 exe 准备）
 │   ├── hanzi.py            # 简繁转换内核（OpenCC + 异体补丁 + 短语保护）
 │   ├── epub.py             # EPUB 容器读写、简繁转换、EPUB 体检
 │   ├── tts.py              # 本地语音合成封装（Coqui TTS，可选功能）
+│   ├── reader.py           # 本地阅读器后端（书架/元信息/封面/TXT 打包/进度标注）
 │   ├── zhconv_file.py      # 文件级转换入口（EPUB / TXT）
 │   ├── device.py           # Kindle USB 设备识别（ctypes 直连）
 │   ├── clippings.py        # My Clippings.txt 解析
@@ -157,11 +177,12 @@ kindle-bridge/
 │   ├── classics.py         # 中文经典（chinese-poetry 语料）
 │   ├── dictbuild.py        # 生成 KOReader 划词查词用的 StarDict 字典
 │   └── data/               # 自带词表（OpenCC 装不上时的兜底）
-├── web/                    # 前端（原生 HTML/CSS/JS，无框架无构建）
+├── web/                    # 前端（原生 HTML/CSS/JS）+ vendor/（epub.js、JSZip）
 ├── miniprogram/            # 微信小程序源码
 ├── _test/                  # 回归测试
 ├── _tools/                 # 抓取语料、打发布包
 ├── 收书/                    # ← 放电子书，工具会从这里取
+├── 书架/                    # ← 阅读器的进度与标注（两个 JSON）
 └── 导出/                    # ← 所有产物都落在这里
 ```
 
@@ -209,9 +230,20 @@ python _tools/fetch-chinese-poetry.py
 ```bash
 python _test/test-hanzi.py     # 繁简转换 + EPUB 体检
 python _test/test-zhconv.py    # 简繁转换全链路（含 HTTP 端到端）
+python _test/test-reader.py    # 阅读器：书架/封面/TXT 打包/Calibre 转换/进度标注
+python _test/test-tts.py       # 朗读：分句、声音目录、未安装时降级
 ```
 
-两个脚本都是零依赖的，直接跑就行，失败会打印具体哪条断言不满足。
+这些脚本都是零依赖的，直接跑就行，失败会打印具体哪条断言不满足。
+前端回归（需要先启动服务）：
+
+```bash
+python app.py &                                  # 或用启动器
+BASE=http://127.0.0.1:8765 node _test/frontend-smoke.js
+```
+
+它在 Node 里用最小 DOM 桩**真实执行 app.js**，喂真实接口数据，抓运行时报错，
+并逐项检查书库、投递、公版书库、阅读器、朗读各页的渲染结果。
 
 ## 打包发布
 
@@ -244,7 +276,10 @@ pyinstaller "Kindle桥-tts.spec"
   没有 `node_modules`，没有构建步骤，`git clone` 完就能跑。
 - **不破解**：带 DRM 的 kfx/azw 一律只如实标注状态，不做任何解密。
 - **不静默安装**：要装什么，先问用户。
-- **唯一第三方依赖**：OpenCC（MIT）。其余全是标准库。
+- **依赖极少**：Python 端唯一的第三方运行时依赖是 OpenCC（MIT），其余全是标准库。
+  「朗读」的 Coqui TTS、「阅读器」的 Calibre 都是**可选、按需安装**，不装也能跑其它功能。
+  前端另随包两份宽松许可的静态资源（epub.js: BSD-2-Clause、JSZip: MIT），
+  不参与安装、不需要 `node_modules`、没有构建步骤，`git clone` 完就能跑。
 
 ## 许可
 

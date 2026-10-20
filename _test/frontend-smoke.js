@@ -35,7 +35,7 @@ function makeEl(tag) {
   return e;
 }
 
-const TABS = ['library', 'epub', 'free', 'highlights', 'vocab', 'export', 'guide']
+const TABS = ['library', 'epub', 'free', 'highlights', 'vocab', 'export', 'guide', 'reader', 'tts']
   .map((t) => { const e = makeEl('button'); e.dataset.tab = t; return e; });
 
 const cache = new Map();
@@ -152,6 +152,46 @@ setTimeout(async () => {  console.log('\n=== 页面状态检查 ===');
     console.log('  首张卡片摘要:', txt.replace(/\s+/g, ' ').slice(0, 150));
     if (txt.indexOf('取回') < 0) errors.push('结果卡片上没有「取回」按钮');
     if (txt.indexOf('在源站查看') < 0) errors.push('结果卡片上没有源站链接');
+  }
+
+  console.log('\n=== 阅读器 / 朗读 ===');
+  const readerTab = TABS.find((t) => t.dataset.tab === 'reader');
+  (readerTab._handlers.click || []).forEach((f) => f());
+  const ttsTab = TABS.find((t) => t.dataset.tab === 'tts');
+  (ttsTab._handlers.click || []).forEach((f) => f());
+
+  for (let i = 0; i < 30; i++) {
+    await new Promise((r) => setTimeout(r, 300));
+    const n = document.querySelector('#reader-shelf').children.length;
+    const v = document.querySelector('#tts-voice').children.length;
+    const r = document.querySelector('#reader-state').textContent;
+    const s = document.querySelector('#tts-state').textContent;
+    if ((n || /^共 /.test(r)) && v && s !== '检测中…') break;
+  }
+  const shelf = document.querySelector('#reader-shelf').children.length;
+  const rstate = document.querySelector('#reader-state').textContent;
+  const voices = document.querySelector('#tts-voice').children.length;
+  const tstate = document.querySelector('#tts-state').textContent;
+  console.log('  书架卡片数:', shelf, '|', rstate);
+  console.log('  可选声音数:', voices, '| 朗读状态:', tstate);
+  // 有书就应有卡片；没书时状态也必须是「共 0 本」而不是报错
+  if (!/^共 \d+ 本$/.test(rstate)) errors.push('阅读器书架未就绪：' + rstate);
+  if (shelf && rstate === '共 0 本') errors.push('书架有卡片但状态说 0 本');
+  if (!voices) errors.push('朗读页没有加载出声音列表');
+
+  // 书架卡片点开一本书（这里只验证跳到打开流程不抛错，真实渲染在有浏览器的机器上验）
+  if (shelf) {
+    try {
+      const card = document.querySelector('#reader-shelf').children[0];
+      (card._handlers.click || []).forEach((f) => f());
+      await new Promise((r) => setTimeout(r, 900));
+      const open = document.querySelector('#reader-overlay').hidden;
+      const loading = document.querySelector('#rd-loading-text').textContent;
+      console.log('  点击书卡后：overlay 可见 =', !open, '| 提示 =', loading || '(空)');
+      if (open) errors.push('点击书卡没有打开阅读器');
+    } catch (e) {
+      errors.push('点击书卡抛错: ' + e.message);
+    }
   }
 
   console.log('\n=== 结果 ===');

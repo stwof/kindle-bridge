@@ -47,6 +47,7 @@ from kindle import vocab as vocab_mod             # noqa: E402
 from kindle import zhconv_file as zcf_mod          # noqa: E402
 from kindle import hanzi as hanzi_mod               # noqa: E402
 from kindle import tts as tts_mod                   # noqa: E402
+from kindle import reader as reader_mod             # noqa: E402
 
 # 「收书」接受的输入：EPUB 需要转换投递；MOBI 家族设备原生可读，零转换直投
 INBOX_EXTS = (".epub", ".mobi", ".azw", ".azw3", ".prc")
@@ -227,6 +228,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(cls_mod.status())
         if path == "/api/tts/voices":
             return self._json(tts_mod.list_voices())
+        if path == "/api/reader/shelf":
+            return self._json(reader_mod.scan_shelf())
+        if path == "/api/reader/meta":
+            return self._reader_meta(urlparse(self.path).query)
+        if path == "/api/reader/epub":
+            return self._reader_epub(urlparse(self.path).query)
+        if path == "/api/reader/cover":
+            return self._reader_cover(urlparse(self.path).query)
         return self._static(path.lstrip("/"))
 
     def do_HEAD(self):
@@ -340,6 +349,24 @@ class Handler(BaseHTTPRequestHandler):
             if not self._same_origin():
                 return self._json({"error": "拒绝跨站请求"}, 403)
             return self._tts_synth(payload)
+
+        if path == "/api/reader/progress":
+            if not self._same_origin():
+                return self._json({"error": "拒绝跨站请求"}, 403)
+            return self._json(reader_mod.save_progress(
+                payload.get("key") or "", payload.get("percent") or 0,
+                payload.get("cfi") or "", payload.get("chapter") or ""))
+
+        if path == "/api/reader/annotations":
+            if not self._same_origin():
+                return self._json({"error": "拒绝跨站请求"}, 403)
+            action = (payload.get("action") or "add").strip().lower()
+            key = payload.get("key") or ""
+            if action == "remove":
+                return self._json({"ok": reader_mod.remove_annot(key, payload.get("id") or "")})
+            return self._json(reader_mod.add_annot(
+                key, payload.get("text") or "", payload.get("cfi") or "",
+                payload.get("note") or "", payload.get("chapter") or ""))
 
         return self._json({"error": "not found"}, 404)
 
@@ -806,6 +833,75 @@ class Handler(BaseHTTPRequestHandler):
         if not res.get("ok"):
             return self._json({"error": res.get("error") or "转换失败"}, 400)
         self._zh_serve(out, os.path.basename(p))
+
+    # ---------- 本地阅读器 ----------
+    def _reader_key(self, query: str) -> str:
+        from urllib.parse import parse_qs
+        return (parse_qs(query).get("key") or [""])[0]
+
+    def _reader_meta(self, query: str):
+        """一本书的阅读信息：元信息、封面、上次读到哪、已有哪些标注。
+
+        这里**不做**转换 —— TXT 现打包、MOBI 走 Calibre 都慢，留给 /api/reader/epub
+        那一跳（前端在“打开书”时才可能等），meta 始终秒回。
+        """
+        key = self._reader_key(query)
+        path = reader_mod.resolve_path(key)
+        if not path:
+            return self._json({"error": "没找到这本书（可能已移走，点「刷新书架」再试）"}, 404)
+        m = reader_mod.meta(path)
+        ext = os.path.splitext(path)[1].lower()
+        has_cover = bool(reader_mod.cover_cached(path, key))
+        out = {
+            "ok": True, "key": key, "title": m["title"], "author": m["author"],
+            "drm": m["drm"], "ext": ext,
+            "needs_convert": ext != ".epub",
+            "cover": f"/api/reader/cover?key={key}" if has_cover else "",
+            "epub_url": f"/api/reader/epub?key={key}",
+            "last": reader_mod.load_progress().get(key) or {},
+            "annotations": reader_mod.annots_of(key),
+        }
+        if ext not in (".epub", ".txt", ".text", ".md"):
+            # MOBI 家族要外调 Calibre，先把“能不能转”说清楚，别等用户点了才报错
+            out["converter"] = "calibre"
+            out["converter_ok"] = bool(conv_mod.find_ebook_convert())
+        if m["drm"]:
+            out["warning"] = "这本书带 DRM，很可能读不出来。本工具不做任何破解。"
+        return self._json(out)
+
+    def _reader_epub(self, query: str):
+        """把书变成 epub.js 能直接读的 EPUB 字节。TXT 现打包、MOBI 走 Calibre。"""
+        key = self._reader_key(query)
+        path = reader_mod.resolve_path(key)
+        if not path:
+            return self._json({"error": "没找到这本书"}, 404)
+        ready = reader_mod.ensure_readable(path)
+        if not ready.get("ok"):
+            return self._json({"error": ready.get("error") or "无法准备这本书"}, 400)
+        try:
+            with open(ready["path"], "rb") as f:
+                body = f.read()
+        except OSError as ex:
+            return self._json({"error": f"读取失败：{ex}"}, 500)
+        self._send(200, body, "application/epub+zip", {
+            "X-Reader-Note": "mobi" if ready.get("converted") else "direct",
+        })
+
+    def _reader_cover(self, query: str):
+        key = self._reader_key(query)
+        path = reader_mod.resolve_path(key)
+        if not path:
+            return self._send(404, b"not found", "text/plain")
+        got = reader_mod.cover_cached(path, key)
+        if not got:
+            return self._send(404, b"no cover", "text/plain")
+        cover_path, ctype = got
+        try:
+            with open(cover_path, "rb") as f:
+                body = f.read()
+        except OSError:
+            return self._send(404, b"no cover", "text/plain")
+        self._send(200, body, ctype, {"Cache-Control": "max-age=3600"})
 
     def _static(self, rel: str):
         rel = rel.split("?")[0].lstrip("/")

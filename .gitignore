@@ -18,6 +18,8 @@ _release/
 !导出/.gitkeep
 收书/*
 !收书/.gitkeep
+书架/*
+!书架/.gitkeep
 工具/*
 !工具/.gitkeep
 corpus/
