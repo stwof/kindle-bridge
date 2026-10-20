@@ -1,0 +1,23 @@
+# Kindle 桥 —— 运行依赖
+#
+# 唯一的第三方依赖就是它：OpenCC 简繁转换内核。
+#   上游项目（事实标准，MIT License）：https://github.com/BYVoid/OpenCC
+#   这里用 PyPI 上的纯 Python 移植版：opencc-python-reimplemented
+#   选它是因为：自带完整数据表（7000+ 字 + 词组）、纯 Python 不需要编译器、
+#   安装后完全离线工作、没有任何 C 扩展坑。
+#
+#   如果装不上（比如内网 pip 源里没有），程序会自动回退到项目自带的
+#   t2s/s2t 数据表（kindle/data/），功能不中断，只是冷僻字覆盖差一点。
+opencc-python-reimplemented>=0.1.7
+
+# ---------------------------------------------------------------------------
+# 说明：其余依赖全部是 Python 标准库，无需安装：
+#   ctypes   —— 直连 Kindle 的 USB 大容量存储（Windows）
+#   sqlite3  —— 读取 Kindle 生词本 vocab.db
+#   zipfile  —— EPUB 容器读写
+#   urllib   —— 抓取公版书、CC-CEDICT 词库
+#
+# 可选功能不需要额外依赖：
+#   · KOReader 划词查词字典：python kindle/dictbuild.py（自行下载 CC-CEDICT）
+#   · 中文经典文库：python _tools/fetch-chinese-poetry.py（自行下载 chinese-poetry）
+#   · EPUB → AZW3：需要本机安装 Calibre（工具会引导你下载官方安装包）

@@ -1,0 +1,109 @@
+/* Kindle 桥 · 小程序全局样式 —— 与桌面端同一套视觉语言 */
+page {
+  background: #f5f6f8;
+  color: #1f2328;
+  font-size: 28rpx;
+  line-height: 1.7;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+}
+
+.wrap { padding: 24rpx 28rpx 60rpx; }
+
+.card {
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 28rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04);
+}
+
+.card-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  margin-bottom: 14rpx;
+  display: flex;
+  align-items: center;
+}
+
+.kicker {
+  font-size: 22rpx;
+  color: #8b949e;
+  letter-spacing: 1rpx;
+  margin-bottom: 10rpx;
+}
+
+.desc { font-size: 25rpx; color: #57606a; }
+
+.muted { color: #8b949e; font-size: 24rpx; }
+
+.btn {
+  background: #1f6feb;
+  color: #fff;
+  border-radius: 999rpx;
+  padding: 0 32rpx;
+  height: 76rpx;
+  line-height: 76rpx;
+  font-size: 28rpx;
+  text-align: center;
+  margin: 12rpx 16rpx 12rpx 0;
+  display: inline-block;
+}
+.btn.ghost { background: #eef1f4; color: #1f2328; }
+.btn.gray { background: #f0f1f3; color: #8b949e; }
+.btn.sm { height: 60rpx; line-height: 60rpx; font-size: 25rpx; padding: 0 24rpx; }
+
+.textarea {
+  width: 100%;
+  min-height: 320rpx;
+  box-sizing: border-box;
+  background: #f7f8fa;
+  border: 2rpx solid #e6e8eb;
+  border-radius: 14rpx;
+  padding: 20rpx;
+  font-size: 28rpx;
+  line-height: 1.7;
+}
+
+.output {
+  background: #f7f8fa;
+  border: 2rpx solid #e6e8eb;
+  border-radius: 14rpx;
+  padding: 20rpx;
+  font-size: 28rpx;
+  line-height: 1.8;
+  word-break: break-all;
+  white-space: pre-wrap;
+  max-height: 700rpx;
+  overflow: auto;
+}
+
+.row { display: flex; flex-wrap: wrap; align-items: center; }
+.row .spacer { flex: 1; }
+
+.list-item {
+  padding: 20rpx 0;
+  border-bottom: 2rpx solid #f0f1f3;
+}
+.list-item:last-child { border-bottom: none; }
+.list-item .t { font-size: 27rpx; margin-bottom: 6rpx; }
+.list-item .m { font-size: 22rpx; color: #8b949e; }
+
+.tag {
+  display: inline-block;
+  font-size: 20rpx;
+  padding: 2rpx 12rpx;
+  border-radius: 6rpx;
+  background: #eef1f4;
+  color: #57606a;
+  margin-right: 8rpx;
+}
+
+.notice {
+  background: #fff8e6;
+  border-left: 6rpx solid #d4a72c;
+  padding: 18rpx 20rpx;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+  color: #664d03;
+  margin-bottom: 20rpx;
+}

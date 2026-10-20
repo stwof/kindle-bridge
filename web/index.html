@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kindle 桥</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">K</div>
+      <div>
+        <h1>Kindle 桥</h1>
+        <p class="sub">把 Kindle 的标注、生词和书籍，送到微信读书</p>
+      </div>
+    </div>
+    <div class="devbox" id="devbox">
+      <span class="dot"></span><span id="devtext">正在检测设备…</span>
+      <button id="refresh" class="ghost" title="重新扫描">刷新</button>
+    </div>
+  </header>
+
+  <section class="stats" id="stats"></section>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-tab="library">书库</button>
+    <button class="tab" data-tab="epub">书籍投递</button>
+    <button class="tab" data-tab="zh">简繁转换</button>
+    <button class="tab" data-tab="free">公版书库</button>
+    <button class="tab" data-tab="highlights">标注</button>
+    <button class="tab" data-tab="vocab">生词</button>
+    <button class="tab" data-tab="export">导出</button>
+    <button class="tab" data-tab="guide">使用说明</button>
+  </nav>
+
+  <main>
+    <section class="panel" id="panel-zh">
+      <div class="envcard">
+        <div class="env-head">
+          <span class="env-kicker">简繁转换 · 本地离线 · OpenCC 开源字典（7000+ 字 + 词组）</span>
+          <span class="env-state" id="zh-state">就绪</span>
+        </div>
+        <div class="free-note">
+          把 <b>EPUB</b> 或 <b>纯文本 TXT</b> 拖进来，一键在 <b>简体 ↔ 繁体</b> 之间互转。
+          数据表来自 OpenCC，<b>不联网</b>；转换时只动文本节点，标签、样式、脚本、图片、字体一律原样，
+          EPUB 转完仍是结构合法的容器。古登堡的中文公版书几乎都是繁体，想舒舒服服读简体用它；
+          反过来，手上的简体书想放进 KOReader 看繁体，也用它。
+        </div>
+      </div>
+
+      <div class="zh-opts">
+        <label>目标字体：
+          <select id="zh-dir">
+            <option value="auto">自动判定（检测当前字体，转成另一边）</option>
+            <option value="simplified">转为简体</option>
+            <option value="traditional">转为繁体</option>
+          </select>
+        </label>
+        <label class="chk"><input type="checkbox" id="zh-inbox"> 转换后同时放入「收书」（方便后续投递到设备）</label>
+      </div>
+
+      <div class="dropzone" id="zh-dropzone">
+        <div class="dz-icon">⇄</div>
+        <div><b>把 EPUB / TXT 拖到这里</b>，或 <button id="zh-pick" class="ghost">选择文件</button></div>
+        <div class="dz-note">支持 EPUB / TXT（自动识别 GBK / Big5 / UTF-8 编码），单次上限 300 MB，全程本地处理</div>
+        <input id="zh-file" type="file" accept=".epub,.txt,.text,.md,.csv" multiple hidden>
+      </div>
+
+      <div id="zh-result"></div>
+    </section>
+
+    <section class="panel active" id="panel-library">
+      <div class="panel-bar">
+        <div class="hint" id="libhint"></div>
+        <div class="actions">
+          <button id="sel-nonwechat" class="ghost">选中不兼容的书</button>
+          <button id="clear-sel" class="ghost">清空选择</button>
+          <button id="copy-wechat" class="primary">导出到「微信读书」文件夹</button>
+          <button id="conv-wechat" class="ghost" hidden>用 Calibre 转换</button>
+        </div>
+      </div>
+      <div class="tablewrap"><table id="libtable">
+        <thead><tr>
+          <th class="c-sel"></th><th>书名</th><th>作者</th><th>格式</th>
+          <th>大小</th><th>最近阅读</th><th>微信读书</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <div id="libresult"></div>
+    </section>
+
+    <section class="panel" id="panel-epub">
+      <div class="routes" id="epub-routes"></div>
+
+      <div class="envcard" id="cal-card">
+        <div class="env-head">
+          <span class="env-kicker">路线 A 环境 · Calibre</span>
+          <span class="env-state" id="cal-state">检测中…</span>
+        </div>
+        <div id="cal-body"></div>
+      </div>
+
+      <div class="dropzone" id="dropzone">
+        <div class="dz-icon">＋</div>
+        <div><b>把 EPUB / MOBI / AZW3 拖到这里</b>，或 <button id="pick-epub" class="ghost">选择文件</button></div>
+        <div class="dz-note">文件会落到本机 <code>收书/</code> 文件夹，全程本地处理，不上传任何服务器</div>
+        <input id="epub-file" type="file" accept=".epub,.mobi,.azw,.azw3,.prc" multiple hidden>
+      </div>
+
+      <div class="panel-bar">
+        <div class="hint" id="epub-hint"></div>
+        <div class="actions">
+          <button id="epub-open-inbox" class="ghost">打开「收书」文件夹</button>
+          <button id="epub-rescan" class="ghost">重新检测 / 刷新</button>
+          <button id="epub-dupes" class="ghost">查设备重复</button>
+          <button id="epub-remove" class="ghost">移除选中</button>
+        </div>
+      </div>
+
+      <div class="tablewrap"><table id="epub-table">
+        <thead><tr>
+          <th class="c-sel"></th><th>文件</th><th>体积</th><th>格式</th>
+          <th>书名 / 作者</th><th>结构</th><th>容量</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <div id="epub-detail"></div>
+
+      <div class="sendbox" id="epub-sendbox">
+        <div class="sendbox-row">
+          <label>路线 B · 云端转码（仅限 EPUB）：先把邮箱填上，工具会生成一封附件已挂好的邮件</label>
+          <input id="epub-to" class="search" type="email" placeholder="你的 Kindle 专属地址，形如 xxx@kindle.com">
+          <input id="epub-from" class="search" type="email" placeholder="你的发件邮箱（需已在亚马逊批准列表里）">
+        </div>
+      </div>
+
+      <div class="actions" id="epub-actions" style="margin-bottom:6px">
+        <button id="epub-azw3" class="primary">路线 A · EPUB 转 AZW3 并拷进 Kindle</button>
+        <button id="epub-native" class="primary">路线 D · MOBI 家族直接拷进设备</button>
+        <button id="epub-eml" class="ghost">路线 B · 生成待发邮件</button>
+        <button id="epub-web" class="ghost">路线 B · 打开 Send to Kindle 网页</button>
+        <button id="epub-koreader" class="ghost">路线 C · 整理给 KOReader</button>
+        <label class="chk"><input type="checkbox" id="epub-push"> 同时拷进设备</label>
+      </div>
+
+      <div id="epub-result"></div>
+    </section>
+
+    <section class="panel" id="panel-free">
+      <div class="envcard">
+        <div class="env-head">
+          <span class="env-kicker">公版书库 · 无版权、无 DRM、合法免费</span>
+          <span class="env-state" id="free-state">待检索</span>
+        </div>
+        <div class="free-note">
+          两个源都提供 <b>Kindle 原生格式</b>，取回后直接拷进 <code>documents/</code> 就能读，不用转换、不用注册账号：
+          <b>古登堡计划</b>（7.5 万+ 册，含 444 册中文）与 <b>标准电子书</b>（志愿者精校排版）。
+        </div>
+        <div class="freebar">
+          <input id="free-q" class="search" type="search" placeholder="搜书名或作者，如 sherlock / 紅樓夢 / Dickens">
+          <select id="free-source">
+            <option value="all">全部书源</option>
+            <option value="gutenberg">古登堡计划</option>
+            <option value="se">标准电子书</option>
+            <option value="classics">中文经典</option>
+          </select>
+          <select id="free-lang">
+            <option value="">全部语言</option>
+            <option value="zh">中文</option>
+            <option value="en">英文</option>
+          </select>
+          <button id="free-go" class="primary">检索</button>
+        </div>
+        <div class="chips" id="free-chips"></div>
+        <div class="actions" style="margin-top:10px">
+          <label class="chk"><input type="checkbox" id="free-push"> 取回后直接送入 Kindle（仅原生格式）</label>
+          <label class="chk"><input type="checkbox" id="free-cover"> 显示封面（从源站取图，跨境较慢）</label>
+        </div>
+        <div class="env-foot" id="free-foot">
+          实测这两条跨境线路都不快（单连接 6~14 KB/s），所以下载默认开 <b>4 路分片并发 + 断点续传</b>，
+          一本 1 MB 的书大约一分钟。<b>请遵守各站的使用条款，仅用于个人阅读。</b>
+        </div>
+      </div>
+
+      <div id="free-gridbox"></div>
+
+      <div class="queue" id="free-queue"></div>
+    </section>
+
+    <section class="panel" id="panel-highlights">
+      <div class="panel-bar">
+        <div class="hint" id="hintips"></div>
+        <div class="actions">
+          <input id="hl-search" class="search" type="search" placeholder="搜索标注内容…">
+          <button id="hl-expand" class="ghost">展开全部</button>
+        </div>
+      </div>
+      <div id="hl-list"></div>
+    </section>
+
+    <section class="panel" id="panel-vocab">
+      <div class="panel-bar">
+        <div class="hint" id="vhint"></div>
+        <div class="actions">
+          <select id="v-lang"><option value="">全部语言</option><option value="zh">中文</option><option value="en">英文</option></select>
+          <input id="v-search" class="search" type="search" placeholder="搜索单词…">
+        </div>
+      </div>
+      <div class="tablewrap"><table id="vtable">
+        <thead><tr><th>单词</th><th>语言</th><th>次数</th><th>最近查询</th><th>例句 / 出处</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </section>
+
+    <section class="panel" id="panel-export">
+      <div class="cards" id="export-cards"></div>
+      <div id="export-result"></div>
+    </section>
+
+    <section class="panel" id="panel-guide">
+      <div class="guide">
+        <h3>这套工具做什么</h3>
+        <p>它把你 Kindle 里的三类内容整理出来，并转成国内阅读工具能直接用的形式：</p>
+        <ul>
+          <li><b>标注 / 笔记</b>（<code>My Clippings.txt</code>）→ Markdown、CSV、JSON，以及可整段粘贴的纯文本笔记。</li>
+          <li><b>生词本</b>（<code>vocab.db</code>）→ CSV / Anki 词库，带例句与出处。</li>
+          <li><b>书籍文件</b> → 微信读书「传书到手机」支持的格式直接复制出来，其余交给 Calibre。</li>
+        </ul>
+        <h3>怎么送进微信读书</h3>
+        <ol>
+          <li>在「书库」里选中书，点「导出到微信读书文件夹」，文件会落在工具的 <code>导出/微信读书/</code> 目录。</li>
+          <li>打开 <b>weread.qq.com</b> 网页版 → 右上角「传书到手机」→ 把文件拖进去。</li>
+          <li>手机微信读书「书架」里就会出现，阅读时长、划线都会正常记录。</li>
+        </ol>
+        <p class="note">微信读书支持 <code>txt / pdf / epub / doc / docx / mobi / azw3</code>；其中 azw3、epub、mobi 体验最好。它<b>不支持 kfx</b>，也不支持导入外部标注 —— 所以标注以文本形式给你，方便你贴进「想法」或自己的笔记软件。</p>
+
+        <h3>在 Kindle 上看 EPUB</h3>
+        <p>Kindle <b>从来不能直接打开 EPUB</b>。把 .epub 用数据线拷进 <code>documents/</code> 是没用的 —— 系统根本不索引它，书库里不会出现。只有三条路：</p>
+        <ol>
+          <li><b>路线 A（推荐）</b>：本地把 EPUB 转成 AZW3，再拷进 <code>documents/</code>。离线、不碰账号、排版可控。需要 <a href="https://calibre-ebook.com/" target="_blank" rel="noreferrer">Calibre</a>（免费），本页可以直接帮你把安装包取回来。</li>
+          <li><b>路线 B</b>：走亚马逊官方 Send to Kindle，它接收 EPUB 并在云端转成 AZW3/KFX 送到设备。零安装，但要联网、要用 <code>@kindle.com</code> 地址，且会把书变成「个人文档」存在亚马逊云端。网页上限 200 MB，邮件上限 50 MB。</li>
+          <li><b>路线 C</b>：越狱后装 KOReader，由它原生渲染 EPUB —— 排版、词典、PDF 重排都是最好的，代价是折腾与风险。</li>
+        </ol>
+        <p class="note">无论走哪条，<b>投递前先体检</b>都是值得的：Send to Kindle 最常见的通用报错 <code>E999</code>，起因通常不是正文，而是压缩包结构（<code>mimetype</code> 不在第一个、被压缩了、夹带 <code>__MACOSX</code> 冗余文件）。本页的「体检」会把这些问题列出来，「整理成可发邮件」会顺手修掉。</p>
+
+        <h3>怎么把 Calibre 装上（路线 A 的准备）</h3>
+        <p>「EPUB 上架」页最上方有一张 <b>路线 A 环境</b> 卡片，三步走完就能用：</p>
+        <ol>
+          <li><b>取回安装包</b>：点「下载官方安装包」，它会从 <code>calibre-ebook.com</code> 流式下载到工具的 <code>工具/</code> 目录，页面上有实时进度。下载完成后会自动校验体积、文件头魔数与 SHA-256。</li>
+          <li><b>运行安装向导</b>：点「运行安装向导」（会先让你确认一次），或点「打开所在文件夹」自己双击那个 <code>calibre-64bit-*.msi</code>。默认装到 <code>C:\Program Files\Calibre2</code>。</li>
+          <li><b>重新检测</b>：装完回到本页点「重新检测」，工具会立刻读到新版本号，路线 A 的按钮随即可用 —— 不需要重启工具。</li>
+        </ol>
+        <p class="note">本工具<b>不做静默安装</b>：不写注册表、不改 PATH、不替代你点「下一步」。它只负责把官方安装包取回来并校验，安装这一步交给你。你也可以完全跳过它，自己去官网下载 —— 效果一样。</p>
+
+        <h3>MOBI 家族不用转换 —— 这是最省事的一类</h3>
+        <p><b>Kindle 原生就能读 MOBI 家族</b>（<code>.mobi</code>、<code>.azw</code>、<code>.azw3</code>、<code>.prc</code>）。它们本来就是亚马逊自家的格式，直接拷进 <code>documents/</code> 就会出现在书库里，能查词、能标注，和商店买的书一视同仁 —— <b>不需要任何转换</b>。本页的「路线 D」就是干这件事：一次拷贝，零依赖、零等待。</p>
+        <p class="note">反过来要注意：<b>Send to Kindle 已经不收 MOBI 了</b>（2023-12-20 起全面停止，连同 <code>.azw</code>、<code>.prc</code>）。别再按老教程把书转成 mobi 再发邮件 —— 要么直接拷进设备，要么用路线 A 转成 AZW3。</p>
+        <table class="mtable">
+          <thead><tr><th>格式</th><th>Kindle 能直接读</th><th>微信读书</th><th>怎么处理</th></tr></thead>
+          <tbody>
+            <tr><td><code>.mobi</code></td><td>是</td><td>支持</td><td>直接拷进设备；也可直接上传微信读书</td></tr>
+            <tr><td><code>.azw3</code></td><td>是</td><td>支持</td><td>直接拷进设备；也可直接上传微信读书</td></tr>
+            <tr><td><code>.azw</code></td><td>是</td><td>不支持</td><td>拷进设备没问题；要进微信读书需先转 azw3</td></tr>
+            <tr><td><code>.epub</code></td><td>否</td><td>支持</td><td>走路线 A / B / C，不能直拷</td></tr>
+            <tr><td><code>.kfx</code></td><td>是</td><td>不支持</td><td>只能在这台设备上读（带 DRM，本工具不破解）</td></tr>
+          </tbody>
+        </table>
+
+        <h3>书从哪儿来 —— 「公版书库」</h3>
+        <p>工具里有一页 <b>公版书库</b>，直接把两个公有领域（无版权、无 DRM、合法免费）的电子书源接进来，检索完一键取回，落到本机 <code>收书/</code>，和手动拖进来的文件走同一条投递流程。</p>
+        <table class="mtable">
+          <thead><tr><th>书源</th><th>规模</th><th>Kindle 原生格式</th><th>适合</th></tr></thead>
+          <tbody>
+            <tr><td><b>古登堡计划</b><br>Project Gutenberg</td><td>7.5 万+ 册，含 <b>444 册中文</b></td><td><code>.mobi</code>（KF8）</td><td>找全、找冷门；中文经典（紅樓夢、西遊記、三國志演義）也在这里</td></tr>
+            <tr><td><b>标准电子书</b><br>Standard Ebooks</td><td>1400+ 册，全是精校</td><td><code>.azw3</code></td><td>要排版；同一个书名，这里的一版明显比古登堡的更像正版书</td></tr>
+          </tbody>
+        </table>
+        <p class="note">两个源都<b>不做破解、也不涉及盗版</b>：收录的全是版权已过期的作品（多为 1928 年前）。当代畅销书在这里是找不到的 —— 那属于另一个问题。</p>
+        <p class="note">实测记录：古登堡的「Kindle」链接看起来是个 <code>.kf8.images</code> 页，实际会跳到 <code>-kf8.mobi</code>；标准电子书的 <code>.azw3</code> 直链第一次返回的是「下载已开始」那张网页，必须补 <code>?source=download</code> 才是真文件。工具里这两处都已经处理好了 —— 并且下载完会先验魔数，确认取回的是书、不是一张错误页，才会放进「收书」。</p>
+        <p class="note">检索小贴士：古登堡的中文书名大多存的是<b>繁体</b>。搜「红楼梦」可能是 0 条，换成「紅樓夢」就出来了；语言切到「中文」不填关键词，则按下载量给出中文公版书榜。</p>
+
+        <h3>关于格式与版权</h3>
+        <p class="note">带 DRM 的书（多为亚马逊商店购买的 kfx/azw）本工具<b>不做任何破解</b>，只如实标注状态。公有领域书、个人文档、无 DRM 的文件可以正常复制或转换。要转换格式需要本机装有 <a href="https://calibre-ebook.com/" target="_blank" rel="noreferrer">Calibre</a>。</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">Kindle 桥 · 本地运行，数据不出机器</footer>
+</div>
+<div id="toast" class="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>

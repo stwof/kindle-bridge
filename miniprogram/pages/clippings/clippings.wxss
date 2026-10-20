@@ -1,0 +1,7 @@
+.body {
+  font-size: 26rpx;
+  color: #24292f;
+  margin-top: 8rpx;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}

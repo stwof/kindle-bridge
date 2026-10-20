@@ -1,0 +1,35 @@
+MIT License
+
+Copyright (c) 2026 Kindle 桥 contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---------------------------------------------------------------------------
+第三方组件与数据（各自遵循其原有许可，本项目不做任何破解或再分发限制）：
+
+· OpenCC (BYVoid)             —— 简繁转换字典与算法，MIT License
+                                https://github.com/BYVoid/OpenCC
+· opencc-python-reimplemented —— OpenCC 的纯 Python 移植，MIT License
+· CC-CEDICT                   —— 中英词典数据，CC BY-SA 4.0
+                                （由 kindle/dictbuild.py 在使用时自行下载，不随包分发）
+· chinese-poetry (chinese-poetry) —— 中文诗词/四书五经语料，MIT License
+                                （由 _tools/fetch-chinese-poetry.py 在使用时自行下载）
+· Project Gutenberg           —— 英文/外文公版书，Project Gutenberg License
+· Standard Ebooks             —— 精校公版书，GPL-3.0（其电子书内容多为公有领域）
+· Calibre                     —— 第三方工具，本项目只调用其命令行，不改动其代码

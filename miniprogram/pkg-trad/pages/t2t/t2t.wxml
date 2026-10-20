@@ -1,0 +1,35 @@
+<view class="wrap">
+  <view class="card">
+    <view class="kicker">简 → 繁</view>
+    <view class="card-title">转成台湾正体</view>
+    <view class="desc">输出「裡面 / 網路 / 軟體 / 資訊 / 這裡」这类最贴近繁体读物习惯的形式。词组表有 1MB，放在分包里按需加载，首次进入稍等一两秒。</view>
+    <textarea class="textarea" placeholder="把简体文字粘贴到这里…" value="{{input}}" bindinput="onInput" maxlength="-1" />
+    <view class="row" style="margin-top:20rpx;">
+      <view class="btn" bindtap="convertText">转成繁体</view>
+      <view class="btn ghost" bindtap="clear">清空</view>
+      <view class="spacer"></view>
+      <text class="muted" wx:if="{{stats}}">{{stats}}</text>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{output}}">
+    <view class="card-title">结果</view>
+    <view class="output">{{output}}</view>
+    <view class="row" style="margin-top:20rpx;">
+      <view class="btn sm" bindtap="copyOutput">复制</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">转换文件</view>
+    <view class="desc">支持 EPUB 与纯文本。EPUB 只改文本节点，标签、样式、脚本、图片原样保留。</view>
+    <view class="row" style="margin-top:18rpx;">
+      <view class="btn {{busy ? 'gray' : ''}}" bindtap="chooseFile">{{busy ? '转换中…' : '选择文件'}}</view>
+    </view>
+    <view class="muted" style="margin-top:12rpx;" wx:if="{{fileName}}">已选：{{fileName}}</view>
+    <view class="muted" style="margin-top:8rpx;" wx:if="{{stats}}">{{stats}}</view>
+    <view class="row" style="margin-top:16rpx;" wx:if="{{outPath}}">
+      <view class="btn sm" bindtap="shareOut">分享 {{outName}}</view>
+    </view>
+  </view>
+</view>

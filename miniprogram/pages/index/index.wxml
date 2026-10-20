@@ -1,0 +1,25 @@
+<view class="wrap">
+  <view class="card">
+    <view class="kicker">KINDLE 桥 · 微信小程序</view>
+    <view class="card-title">在手机上处理你的书</view>
+    <view class="desc">所有计算都在这台手机里完成，文本不会上传到任何服务器。电脑上插着 Kindle 时，用桌面版的 <text class="mono">Kindle 桥</text> 读取设备；手机端负责随身携带的那部分：转简繁、翻标注、背生词。</view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">功能</view>
+    <view wx:for="{{features}}" wx:key="key" class="feat" data-url="{{item.page}}" bindtap="go">
+      <view class="feat-icon">{{item.icon}}</view>
+      <view class="feat-body">
+        <view class="feat-t">{{item.title}}</view>
+        <view class="feat-d">{{item.desc}}</view>
+      </view>
+      <view class="feat-arrow">›</view>
+    </view>
+  </view>
+
+  <view class="notice">
+    小程序碰不到插在电脑上的 Kindle，所以「投递到设备」「扫描书库」这类操作仍然只能在桌面端做。
+  </view>
+
+  <view class="muted center">版本 {{version}} · 数据不出手机</view>
+</view>

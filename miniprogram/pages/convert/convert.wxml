@@ -1,0 +1,35 @@
+<view class="wrap">
+  <view class="card">
+    <view class="kicker">繁 → 简</view>
+    <view class="card-title">转换文字</view>
+    <view class="desc">字典来自 OpenCC（7000+ 字与词组），含「擡→抬」「舖→铺」这类冷僻异体字；「乾坤」「變徵」按语义保留繁体。转换完全在本地完成。</view>
+    <textarea class="textarea" placeholder="把繁体文字粘贴到这里…" value="{{input}}" bindinput="onInput" maxlength="-1" auto-height="false" />
+    <view class="row" style="margin-top:20rpx;">
+      <view class="btn" bindtap="convertText">转成简体</view>
+      <view class="btn ghost" bindtap="clear">清空</view>
+      <view class="spacer"></view>
+      <text class="muted" wx:if="{{stats}}">{{stats}}</text>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{output}}">
+    <view class="card-title">结果</view>
+    <view class="output">{{output}}</view>
+    <view class="row" style="margin-top:20rpx;">
+      <view class="btn sm" bindtap="copyOutput">复制</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">转换文件</view>
+    <view class="desc">支持 EPUB 与纯文本。EPUB 只改文本节点，标签、样式、脚本、图片原样保留，产出仍是结构合法的书。</view>
+    <view class="row" style="margin-top:18rpx;">
+      <view class="btn {{busy ? 'gray' : ''}}" bindtap="chooseFile">{{busy ? '转换中…' : '选择文件'}}</view>
+    </view>
+    <view class="muted" style="margin-top:12rpx;" wx:if="{{fileName}}">已选：{{fileName}} {{fileSize}}</view>
+    <view class="muted" style="margin-top:8rpx;" wx:if="{{stats}}">{{stats}}</view>
+    <view class="row" style="margin-top:16rpx;" wx:if="{{outPath}}">
+      <view class="btn sm" bindtap="shareOut">分享 {{outName}}</view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,45 @@
+<view class="wrap">
+  <view class="card">
+    <view class="kicker">标注</view>
+    <view class="card-title">解析 My Clippings.txt</view>
+    <view class="desc">Kindle 的标注文件在设备根目录（用数据线连上电脑就能拷出来）。在电脑上把它传到微信聊天里，再在这里选它。</view>
+    <view class="row" style="margin-top:18rpx;">
+      <view class="btn {{busy ? 'gray' : ''}}" bindtap="chooseFile">{{busy ? '解析中…' : '选择标注文件'}}</view>
+    </view>
+    <view class="muted" style="margin-top:12rpx;" wx:if="{{fileName}}">已选：{{fileName}}</view>
+    <view class="muted" style="margin-top:8rpx;" wx:if="{{stats}}">{{stats}}</view>
+  </view>
+
+  <view class="card" wx:if="{{total}}">
+    <view class="card-title">导出</view>
+    <view class="row">
+      <view class="btn sm" bindtap="doExport" data-kind="md">Markdown</view>
+      <view class="btn sm ghost" bindtap="doExport" data-kind="csv">CSV</view>
+      <view class="btn sm ghost" bindtap="doExport" data-kind="weread">微信读书笔记</view>
+      <view class="btn sm ghost" bindtap="doExport" data-kind="json">JSON</view>
+      <view class="btn sm ghost" bindtap="copyPreview">复制全文</view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{books.length}}">
+    <view class="card-title">按书分组</view>
+    <view class="list-item" wx:for="{{books}}" wx:key="title">
+      <view class="t">{{item.title}}</view>
+      <view class="m">{{item.author}} · {{item.n}} 条</view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{preview.length}}">
+    <view class="card-title">预览</view>
+    <view class="list-item" wx:for="{{preview}}" wx:key="key">
+      <view class="t">
+        <text class="tag">{{item.type}}</text>{{item.title}}
+      </view>
+      <view class="m" wx:if="{{item.page || item.location}}">
+        <text wx:if="{{item.page}}">第 {{item.page}} 页 </text>
+        <text wx:if="{{item.location}}">位置 {{item.location}}</text>
+      </view>
+      <view class="body">{{item.text}}</view>
+    </view>
+  </view>
+</view>

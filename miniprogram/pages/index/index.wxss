@@ -1,0 +1,18 @@
+.feat {
+  display: flex;
+  align-items: center;
+  padding: 24rpx 0;
+  border-bottom: 2rpx solid #f0f1f3;
+}
+.feat:last-child { border-bottom: none; }
+.feat-icon {
+  width: 76rpx; height: 76rpx; line-height: 76rpx; text-align: center;
+  background: #eef1f4; border-radius: 18rpx; font-size: 34rpx;
+  margin-right: 20rpx; flex: none;
+}
+.feat-body { flex: 1; }
+.feat-t { font-size: 29rpx; font-weight: 500; margin-bottom: 4rpx; }
+.feat-d { font-size: 23rpx; color: #8b949e; line-height: 1.5; }
+.feat-arrow { color: #c8cdd3; font-size: 40rpx; margin-left: 12rpx; }
+.mono { font-family: Menlo, Consolas, monospace; background: #f0f1f3; padding: 2rpx 8rpx; border-radius: 6rpx; }
+.center { text-align: center; }

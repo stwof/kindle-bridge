@@ -1,0 +1,27 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/convert/convert",
+    "pages/clippings/clippings",
+    "pages/vocab/vocab"
+  ],
+  "subpackages": [
+    {
+      "root": "pkg-trad",
+      "name": "trad",
+      "pages": [
+        "pages/t2t/t2t"
+      ]
+    }
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTitleText": "Kindle 桥",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f5f6f8"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

@@ -1,0 +1,34 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# ---- 构建产物 ----
+build/
+dist/
+_release/
+*.spec.bak
+
+# ---- 运行时数据（体积大、且属于用户私有内容，不进版本库）----
+导出/*
+!导出/.gitkeep
+收书/*
+!收书/.gitkeep
+工具/*
+!工具/.gitkeep
+corpus/
+*.log
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 测试残留
+*.err

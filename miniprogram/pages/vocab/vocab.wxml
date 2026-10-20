@@ -1,0 +1,33 @@
+<view class="wrap">
+  <view class="card">
+    <view class="kicker">生词</view>
+    <view class="card-title">转成 Anki 词库</view>
+    <view class="desc">Kindle 的生词库是设备上的 SQLite，小程序读不了。先在<b>电脑端</b>的「生词」页导出《Kindle生词本.csv》，把它传到微信聊天里，再在这里选它。</view>
+    <view class="row" style="margin-top:18rpx;">
+      <view class="btn {{busy ? 'gray' : ''}}" bindtap="chooseFile">{{busy ? '解析中…' : '选择生词 CSV'}}</view>
+    </view>
+    <view class="muted" style="margin-top:12rpx;" wx:if="{{fileName}}">已选：{{fileName}}</view>
+    <view class="muted" style="margin-top:8rpx;" wx:if="{{stats}}">{{stats}}</view>
+  </view>
+
+  <view class="card" wx:if="{{total}}">
+    <view class="card-title">导出</view>
+    <view class="row">
+      <view class="btn sm" bindtap="doExport" data-kind="anki">Anki 词库</view>
+      <view class="btn sm ghost" bindtap="doExport" data-kind="md">Markdown</view>
+      <view class="btn sm ghost" bindtap="doExport" data-kind="json">JSON</view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{preview.length}}">
+    <view class="card-title">预览</view>
+    <view class="list-item" wx:for="{{preview}}" wx:key="word">
+      <view class="t">
+        <text class="tag">{{item.lang === 'zh' ? '中文' : '英文'}}</text>{{item.word}}
+        <text class="m" wx:if="{{item.lookups}}"> ×{{item.lookups}}</text>
+      </view>
+      <view class="m" wx:if="{{item.context}}">{{item.context}}</view>
+      <view class="m" wx:if="{{item.book}}">—— {{item.book}}</view>
+    </view>
+  </view>
+</view>
