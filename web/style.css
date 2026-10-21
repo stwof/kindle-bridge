@@ -379,9 +379,12 @@ body.rd-open { overflow: hidden; }
 .rd-top button { font-size: 12.5px; white-space: nowrap; }
 .rd-stage {
   flex: 1; min-height: 0; margin: 0 auto; position: relative;
-  width: 100%;
+  width: 100%; overflow: hidden;
 }
 .rd-stage > iframe { border: 0; }
+/* epub.js 会把 iframe 包进容器 div；个别书把 iframe 撑到超宽，这里一律摁回舞台宽度，
+   配合内容钩子里注入的 max-width 规则，避免超宽文档拖慢渲染、撑破布局。 */
+.rd-stage iframe { width: 100% !important; max-width: 100% !important; height: 100%; border: 0; }
 .rd-loading {
   position: absolute; inset: 0; z-index: 5; display: none;
   flex-direction: column; gap: 12px; align-items: center; justify-content: center;
@@ -426,6 +429,33 @@ body.rd-open { overflow: hidden; }
 }
 .rd-selbar[hidden] { display: none; }
 .rd-selbar button { font-size: 12px; }
+
+/* 查词结果悬浮卡片：固定右上方，独立于 iframe，不挡翻页手势 */
+.rd-dict {
+  position: fixed; right: 18px; top: 122px; z-index: 35;
+  width: 300px; max-height: min(60vh, 460px); overflow-y: auto;
+  padding: 0; border-radius: 12px; background: var(--surface);
+  border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+  display: flex; flex-direction: column;
+}
+.rd-dict[hidden] { display: none; }
+.rd-dict-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-bottom: 1px solid var(--line-soft);
+  position: sticky; top: 0; background: var(--surface);
+}
+.rd-dict-word { flex: 1; font-size: 15px; font-weight: 600; color: var(--text); }
+.rd-dict-spk, .rd-dict-close {
+  border: 0; background: transparent; cursor: pointer; font-size: 15px;
+  line-height: 1; padding: 2px 6px; border-radius: 6px; color: var(--muted);
+}
+.rd-dict-spk:hover, .rd-dict-close:hover { background: var(--line-soft); color: var(--text); }
+.rd-dict-body { padding: 10px 14px 14px; font-size: 13.5px; line-height: 1.7; color: var(--text); }
+.rd-dict-body .rd-dict-py { color: var(--accent); font-weight: 500; }
+.rd-dict-body .rd-dict-li { padding: 3px 0; border-bottom: 1px dashed var(--line-soft); }
+.rd-dict-body .rd-dict-li:last-child { border-bottom: 0; }
+.rd-dict-body .rd-dict-empty { color: var(--muted); font-style: italic; }
+.rd-dict-loading { color: var(--muted); }
 
 .rd-drawer, .rd-settings {
   position: fixed; top: 0; bottom: 0; width: 280px; z-index: 40;

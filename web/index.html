@@ -395,8 +395,19 @@
   <!-- 选中文字后的浮动工具条 -->
   <div class="rd-selbar" id="rd-selbar" hidden>
     <button id="rd-sel-hl" class="primary">划线并保存</button>
+    <button id="rd-sel-dict" class="ghost">查词</button>
     <button id="rd-sel-read" class="ghost">🔊 朗读</button>
     <button id="rd-sel-copy" class="ghost">复制</button>
+  </div>
+
+  <!-- 查词结果悬浮卡片 -->
+  <div class="rd-dict" id="rd-dict-pop" hidden>
+    <div class="rd-dict-head">
+      <span class="rd-dict-word" id="rd-dict-word"></span>
+      <button class="rd-dict-spk" id="rd-dict-spk" title="朗读">🔊</button>
+      <button class="rd-dict-close" id="rd-dict-close" title="关闭">×</button>
+    </div>
+    <div class="rd-dict-body" id="rd-dict-body"></div>
   </div>
 
   <aside class="rd-drawer" id="rd-toc-drawer" hidden>

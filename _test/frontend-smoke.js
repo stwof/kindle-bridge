@@ -66,6 +66,15 @@ const realFetch = global.fetch;
 global.fetch = (u, o) => realFetch(u.startsWith('http') ? u : BASE + u, o);
 
 const src = fs.readFileSync(path.join(__dirname, '..', 'web', 'app.js'), 'utf8');
+
+// 静态检查：阅读器的「查词」按钮与悬浮卡片必须在 index.html 里
+const html = fs.readFileSync(path.join(__dirname, '..', 'web', 'index.html'), 'utf8');
+['rd-sel-dict', 'rd-dict-pop', 'rd-dict-word', 'rd-dict-body', 'rd-dict-close'].forEach((id) => {
+  if (!html.includes('id="' + id + '"')) errors.push('index.html 缺少查词相关节点 #' + id);
+});
+if (!/rd-sel-dict/.test(src)) errors.push('app.js 未接线 #rd-sel-dict');
+if (!/function readerSelDict/.test(src)) errors.push('app.js 缺少 readerSelDict 实现');
+
 try {
   new Function(src)();          // app.js 是 IIFE，执行即 bind() + load()
   console.log('  app.js 顶层执行：无异常');

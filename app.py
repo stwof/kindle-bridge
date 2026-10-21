@@ -49,6 +49,7 @@ from kindle import zhconv_file as zcf_mod          # noqa: E402
 from kindle import hanzi as hanzi_mod               # noqa: E402
 from kindle import tts as tts_mod                   # noqa: E402
 from kindle import reader as reader_mod             # noqa: E402
+from kindle import dictdata as dictdata_mod         # noqa: E402
 
 # 「收书」接受的输入：EPUB 需要转换投递；MOBI 家族设备原生可读，零转换直投
 INBOX_EXTS = (".epub", ".mobi", ".azw", ".azw3", ".prc")
@@ -246,6 +247,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._reader_epub("key=" + m_book.group(1))
         if path == "/api/reader/cover":
             return self._reader_cover(urlparse(self.path).query)
+        if path == "/api/dict/lookup":
+            return self._dict_lookup(urlparse(self.path).query)
         return self._static(path.lstrip("/"))
 
     def do_HEAD(self):
@@ -917,6 +920,12 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             return self._send(404, b"no cover", "text/plain")
         self._send(200, body, ctype, {"Cache-Control": "max-age=3600"})
+
+    def _dict_lookup(self, query: str):
+        from urllib.parse import parse_qs
+        q = (parse_qs(query).get("q") or [""])[0].strip()
+        res = dictdata_mod.lookup(q)
+        self._json(res)
 
     def _static(self, rel: str):
         rel = rel.split("?")[0].lstrip("/")

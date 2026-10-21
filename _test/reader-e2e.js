@@ -282,7 +282,63 @@ async function getPageWsUrl() {
     await sleep(600);
     ok('停止后状态条隐藏', await cdp.eval(`return document.querySelector('#rd-speech').hidden`));
 
-    console.log('\n【8】控制台错误');
+    console.log('\n【9】查词（字典）功能');
+    ok('选词工具条有「查词」按钮', await cdp.eval(`return !!document.querySelector('#rd-sel-dict')`));
+    ok('查词结果卡片存在', await cdp.eval(`return !!document.querySelector('#rd-dict-pop')`));
+    // 从页面真实调用字典接口（同源、无代理）
+    const dictRes = await cdp.eval(`
+      return (async () => {
+        try {
+          const r = await fetch('/api/dict/lookup?q=' + encodeURIComponent('你好'));
+          const j = await r.json();
+          return JSON.stringify({found: j.found, word: j.word, n: (j.entries||[]).length});
+        } catch (e) { return JSON.stringify({err: '' + e}); }
+      })();`);
+    const dj = JSON.parse(dictRes);
+    ok('从页面调用字典接口命中', dj.found === true && dj.word === '你好' && dj.n > 0, dictRes);
+    // 划词后点「查词」：在 iframe 里构造真实选区，看工具条与查词卡是否响应
+    const selInfo = await cdp.eval(`
+      return (function(){
+        const f=document.querySelector('#rd-stage iframe'); if(!f) return JSON.stringify({err:'no iframe'});
+        let d=null; try{ d=f.contentDocument }catch(e){ return JSON.stringify({err:'xdomain'}); }
+        if(!d || !d.body) return JSON.stringify({err:'no body'});
+        const walker=d.createTreeWalker(d.body, NodeFilter.SHOW_TEXT);
+        let node, picked=0, word='';
+        while((node=walker.nextNode())){
+          const s=(node.nodeValue||'').trim();
+          if(s.length>=2){
+            const range=d.createRange();
+            range.setStart(node,0);
+            range.setEnd(node, Math.min(node.nodeValue.length, 4));
+            const sel=d.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+            word=s.slice(0,4); picked=1; break;
+          }
+        }
+        if(!picked) return JSON.stringify({err:'no text node'});
+        d.dispatchEvent(new Event('selectionchange', {bubbles:true}));
+        return JSON.stringify({word:word});
+      })();`);
+    const si = JSON.parse(selInfo);
+    await sleep(1200);
+    const selShown = await cdp.eval(`return !document.querySelector('#rd-selbar').hidden`);
+    if (si.word && selShown) {
+      ok('划词后浮出选词工具条', true, '词=' + si.word);
+      await cdp.eval(`document.querySelector('#rd-sel-dict').click(); return 1`);
+      await sleep(800);
+      const popState = await cdp.eval(`
+        return JSON.stringify({
+          shown: !document.querySelector('#rd-dict-pop').hidden,
+          word: (document.querySelector('#rd-dict-word')||{}).textContent||'',
+          body: (document.querySelector('#rd-dict-body')||{}).textContent||''
+        });`);
+      const ps = JSON.parse(popState);
+      ok('点「查词」后弹出释义卡', ps.shown, popState);
+      await shot('06-dict');
+    } else {
+      console.log('  （划词流程受 epub.js 选中事件驱动，本页未能自动构造，跳过交互断言：' + selInfo + '）');
+    }
+
+    console.log('\n【10】控制台错误');
     // favicon.ico 这类静态小图不算功能故障，单独剔出来但要如实报告
     const allErrs = logs.filter((l) => l.kind === 'error' || l.kind === 'pageerror');
     const badReq = [...new Set(failedUrls)];

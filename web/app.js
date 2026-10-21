@@ -1696,10 +1696,15 @@
         const style = doc.createElement('style');
         style.textContent = '.rd-hl{background:rgba(255,213,79,.45);border-radius:2px;'
           + 'padding:0 1px;box-decoration-break:clone;-webkit-box-decoration-break:clone}'
-          + '.rd-dark .rd-hl{background:rgba(255,213,79,.32)}';
+          + '.rd-dark .rd-hl{background:rgba(255,213,79,.32)}'
+          // 个别书（尤其 Calibre 转出来的 MOBI→EPUB）有超宽元素会把文档撑到几万像素，
+          // 既拖慢渲染又让翻页分区错乱——这里统一把内容宽度摁在视口内。
+          + 'html,body{max-width:100%!important;overflow-x:hidden!important}'
+          + 'img,svg,table,pre,figure{max-width:100%!important;box-sizing:border-box}';
         doc.head.appendChild(style);
-        // 翻页手势必须挂在 iframe 内部文档上——iframe 里的点击/滚轮/触摸不会冒泡到外层 #rd-stage
-        if (doc.body) bindContentGestures(doc, () => (doc.documentElement.clientWidth || doc.body.clientWidth || 1));
+        // 翻页手势必须挂在 iframe 内部文档上——iframe 里的点击/滚轮/触摸不会冒泡到外层 #rd-stage。
+        // 分区基准用「可见视口（舞台宽度）」而非文档滚动宽度，避免文档被撑宽时左右区判断错乱。
+        if (doc.body) bindContentGestures(doc);
       });
       rendition.on('relocated', readerOnRelocated);
       rendition.on('selected', readerOnSelected);
@@ -1975,6 +1980,7 @@ const readerSpeech = (() => {
       text = (r && r.toString()) || '';
     } catch (e) { text = ''; }
     RD.sel = { cfiRange, text };
+    hideDictPop();
     $('#rd-selbar').hidden = false;
   }
 
@@ -2011,6 +2017,42 @@ const readerSpeech = (() => {
     ta.select();
     try { document.execCommand('copy'); toast('已复制'); } catch (e) { toast('复制失败，请手动选'); }
     ta.remove();
+  }
+
+  // —— 查词（字典）——
+  const _dictCache = new Map();          // 同词复用，避免重复打后端
+
+  function hideDictPop() { $('#rd-dict-pop').hidden = true; }
+
+  function renderDict(word, data) {
+    const body = $('#rd-dict-body');
+    if (!data || !data.found) {
+      body.innerHTML = '<div class="rd-dict-empty">未收录「' + esc(word) + '」</div>';
+      return;
+    }
+    body.innerHTML = data.entries.map((en) => {
+      const cls = /^\[.*\]$/.test(en.trim()) ? 'rd-dict-py' : 'rd-dict-li';
+      return '<div class="' + cls + '">' + esc(en) + '</div>';
+    }).join('');
+  }
+
+  async function readerSelDict() {
+    const text = RD.sel && RD.sel.text;
+    const word = text ? text.trim().replace(/^[\s\W]+|[\s\W]+$/g, '') : '';
+    if (!word) { toast('请先选中要查的词'); return; }
+    const pop = $('#rd-dict-pop');
+    $('#rd-dict-word').textContent = word;
+    $('#rd-dict-body').innerHTML = '<div class="rd-dict-loading">查词中…</div>';
+    pop.hidden = false;
+    if (_dictCache.has(word)) { renderDict(word, _dictCache.get(word)); return; }
+    try {
+      const r = await fetch('/api/dict/lookup?q=' + encodeURIComponent(word));
+      const data = await r.json();
+      _dictCache.set(word, data);
+      renderDict(word, data);
+    } catch (e) {
+      $('#rd-dict-body').innerHTML = '<div class="rd-dict-empty">查询失败：' + esc(e.message || '') + '</div>';
+    }
   }
 
   function readerRenderToc(toc) {
@@ -2093,6 +2135,7 @@ const readerSpeech = (() => {
     document.body.classList.remove('rd-open');
     readerCloseDrawers();
     $('#rd-selbar').hidden = true;
+    $('#rd-dict-pop').hidden = true;
     try { RD.book && RD.book.destroy && RD.book.destroy(); } catch (e) { /* ignore */ }
     RD.book = null;
     RD.rendition = null;
@@ -2133,7 +2176,22 @@ const readerSpeech = (() => {
     $('#rd-notes-close').addEventListener('click', () => { $('#rd-notes-drawer').hidden = true; });
     $('#rd-settings-close').addEventListener('click', () => { $('#rd-settings-panel').hidden = true; });
     $('#rd-sel-hl').addEventListener('click', readerSelHighlight);
+    $('#rd-sel-dict').addEventListener('click', readerSelDict);
     $('#rd-sel-copy').addEventListener('click', readerSelCopy);
+    $('#rd-dict-close').addEventListener('click', hideDictPop);
+    $('#rd-dict-spk').addEventListener('click', () => {
+      const w = $('#rd-dict-word').textContent;
+      if (!w) return;
+      hideDictPop();
+      readerSpeech.speakText(w, '朗读：' + w);
+    });
+    // 点别处（顶部栏 / 背景）收起查词卡；书内点击由 iframe 内 pointerdown 处理
+    document.addEventListener('pointerdown', (e) => {
+      const p = $('#rd-dict-pop');
+      if (p.hidden) return;
+      if (p.contains(e.target) || $('#rd-selbar').contains(e.target)) return;
+      hideDictPop();
+    });
 
     $('#rd-slider').addEventListener('change', () => {
       if (!RD.book || !RD.book.locations || !RD.book.locations.length) return;
@@ -2237,7 +2295,7 @@ const readerSpeech = (() => {
     $('#reader-overlay').classList.toggle('rd-hide-ui');
   }
 
-  function bindContentGestures(doc, widthFn) {
+  function bindContentGestures(doc) {
     if (!doc || doc.__rdGesturesBound) return;
     doc.__rdGesturesBound = true;
 
@@ -2245,6 +2303,7 @@ const readerSpeech = (() => {
 
     doc.addEventListener('pointerdown', (e) => {
       downX = e.clientX; downY = e.clientY; dragMoved = false; swiped = false;
+      hideDictPop();                       // 在书内点一下，收起查词卡（不影响翻页）
     });
     doc.addEventListener('pointerup', (e) => {
       const dx = e.clientX - downX, dy = e.clientY - downY;
@@ -2256,8 +2315,15 @@ const readerSpeech = (() => {
       if (swiped) { swiped = false; return; }     // 触摸滑动后的合成 click，忽略
       if (!RD.ready) return;
       if (readerAnyDrawerOpen() || readerHasSelection() || dragMoved) return;
-      const w = (widthFn && widthFn()) || 1;
-      const x = e.clientX;                         // 相对 iframe 视口
+      // 以「可见舞台」为基准算落点：个别书（尤其 Calibre 转的 MOBI→EPUB）会把 iframe/文档
+      // 撑到几万像素并居中偏移，直接用 iframe 内 clientX 会把左右区判反。换算成相对
+      // 舞台左边的坐标最稳。
+      const stage = $('#rd-stage');
+      const sr = stage.getBoundingClientRect();
+      const frame = doc.defaultView && doc.defaultView.frameElement;
+      const fLeft = frame ? frame.getBoundingClientRect().left : sr.left;
+      const x = fLeft + e.clientX - sr.left;
+      const w = sr.width || 1;
       if (x < w * 0.34) readerGo(-1);
       else if (x > w * 0.66) readerGo(1);
       else readerToggleChrome();

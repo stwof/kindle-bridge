@@ -126,6 +126,7 @@ PY_TESTS = [
     ("简繁内核", ["test-hanzi.py"]),
     ("简繁转换接口", ["test-zhconv.py"]),
     ("阅读器后端", ["test-reader.py"]),
+    ("字典", ["test-dict.py"]),
     ("语音合成", ["test-tts.py"]),
     ("MOBI 体检", ["test-mobi.py"]),
     ("本地经典", ["test-classics.py"]),
