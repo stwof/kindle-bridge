@@ -1667,6 +1667,233 @@
     }
   }
 
+  /* ---------- 分页引擎（治「翻几页后没内容」） ----------
+   * epub.js 的分页是这样做的：正文排成多列后，把 iframe 撑到「正文全宽」（实测普通书
+   * 10 万像素、极端情况 24 万像素），然后滚动外层的 div.epub-container 来翻页。
+   * 这有两个后果：
+   *   1) 十万像素级的 iframe，每次重排都是卡顿源；
+   *   2) expand() 在字体/样式还没就绪时会量到「瞬态宽度」（实测 242,250px = 323 列，
+   *      正常 99,750px = 133 列），布局竞态下可见窗口会落到空白区——这就是
+   *      「翻几页后就没有内容了」的根因，且 v1.5.0 用样式表钳制 iframe 宽度的尝试
+   *      完全无效（epub.js 设的是行内 !important，压过样式表的 !important）。
+   * 现在的做法：iframe 钉死在舞台尺寸（多列布局一模一样，只是不再巨大化），翻页改成
+   * 滚 iframe 里的文档。epub.js 的 next/prev/moveTo/进度汇报逻辑一行不改，只把
+   * container 的滚动属性代理到文档上——布局几何、CFI、进度算法全部保持原语义。
+   */
+  function readerInstallPaging(rendition) {
+    const mgr = rendition && rendition.manager;
+    if (!mgr) return false;   // manager 是排队异步创建的，调用方要重试
+    readerPatchViewExpand(mgr);
+    readerProxyScroll(mgr);
+    readerPatchLocation(mgr);
+    readerKeepScrollOnRelayout(mgr);
+    return true;
+  }
+
+  // 1) expand 不再把 iframe 撑到正文全宽，改成钉在舞台尺寸（文档多列布局不变）
+  function readerPatchViewExpand(mgr) {
+    if (mgr.__rdExpandPatched) return;
+    mgr.__rdExpandPatched = true;
+    if (!mgr.View || !mgr.View.prototype || typeof mgr.View.prototype.expand !== 'function') return;
+    mgr.View.prototype.expand = function () {
+      const view = this;
+      if (!view.iframe || view._expanding) return;
+      view._expanding = true;
+      const d0 = view.iframe.contentDocument;
+      const keep = d0 ? readerScrollTarget(d0).scrollLeft : 0;
+      try {
+        const w = (view.layout && view.layout.width) || view.settings.width;
+        const h = (view.layout && view.layout.height) || view.settings.height;
+        if (view._needsReframe || w != view._width || h != view._height) view.reframe(w, h);
+        // 行内 !important 钉死：epub.js 自己就是用行内 important 设 iframe 尺寸的
+        view.iframe.style.setProperty('width', w + 'px', 'important');
+        view.iframe.style.setProperty('height', h + 'px', 'important');
+      } catch (e) { /* 钉尺寸失败不拦着读书，退回默认行为 */ }
+      // reframe 会重排正文文档，把翻页位置接回来
+      if (d0 && keep > 0) { try { readerScrollTarget(d0).scrollLeft = keep; } catch (e) { /* ignore */ } }
+      view._expanding = false;
+    };
+  }
+
+  // 2) 滚动重定向：epub.js 翻页滚的是 div.epub-container，iframe 钉住后它已无可滚，
+  //    把 scrollLeft/scrollWidth 代理到 iframe 文档上——next/prev/moveTo 原样生效。
+  //    滚动目标动态判定，先后两级：
+  //    a) document.scrollingElement——规范里「谁在滚视口」的正解。不少 EPUB 的
+  //       XHTML 不带 DOCTYPE，epub.js 用 document.write 写进 iframe 后整个文档处于
+  //       quirks 模式，此时视口滚动器是 BODY 而不是 documentElement（实测
+  //       compatMode=BackCompat、scrollingElement=BODY，给 documentElement 赋
+  //       scrollLeft 静默无效）；带 DOCTYPE 的书是 standards 模式，滚动器才是
+  //       HTML。两种书混在书架上，看起来就像「时好时坏的竞态」。
+  //    b) 万一 scrollingElement 不可滚（极端样式），退回按可滚宽度挑一个。
+  function readerScrollTarget(doc) {
+    const se = doc.scrollingElement;
+    if (se && se.scrollWidth > se.clientWidth + 1) return se;
+    const de = doc.documentElement;
+    if (de.scrollWidth > de.clientWidth + 1) return de;
+    const b = doc.body;
+    if (b && b.scrollWidth > b.clientWidth + 1) return b;
+    return se || de;
+  }
+
+  function readerProxyScroll(mgr) {
+    const c = mgr.container;
+    if (c && !c.__rdProxied) {
+      c.__rdProxied = true;
+      Object.defineProperty(c, 'scrollLeft', {
+        configurable: true,
+        get() {
+          const d = readerFrameDoc();
+          return d ? readerScrollTarget(d).scrollLeft : 0;
+        },
+        set(v) {
+          const d = readerFrameDoc();
+          if (d) { try { readerScrollTarget(d).scrollLeft = v; } catch (e) { /* ignore */ } }
+        },
+      });
+      Object.defineProperty(c, 'scrollWidth', {
+        configurable: true,
+        get() {
+          const d = readerFrameDoc();
+          return d ? readerScrollTarget(d).scrollWidth : (c.clientWidth || 0);
+        },
+      });
+    }
+    // 3) manager.scrollLeft 是 epub.js 自己的滚动记账，原来靠容器的 scroll 事件刷新；
+    //    容器不再滚动后改成实时读文档，免得换章之后记账陈旧、带偏预取判断。
+    if (!mgr.__rdSlPatched) {
+      mgr.__rdSlPatched = true;
+      try {
+        Object.defineProperty(mgr, 'scrollLeft', {
+          configurable: true,
+          get() {
+            const d = readerFrameDoc();
+            return d ? readerScrollTarget(d).scrollLeft : 0;
+          },
+          set() { /* 记账改由 getter 实时提供，忽略写入 */ },
+        });
+      } catch (e) { /* 极老浏览器不支持就退回原行为 */ }
+    }
+  }
+
+  // 4) 进度 / 页码 / CFI：epub.js 的 paginatedLocation() 是这样推当前页的——
+  //    r = 容器左边界 - view 元素左边界（view = 包 iframe 的那个 div）。iframe 钉住之后
+  //    容器和 view 都不再移动，r 恒为 0，于是页数永远是第 1 页、CFI 永远指向本章开头、
+  //    进度条一动不动。这里把 paginatedLocation 内部用到的 view.position() 换成
+  //    「内容矩形」——iframe 撑到正文全宽时（也就是 epub.js 原生模型）position() 本来
+  //    就是这个矩形，所以改完跟原生语义逐字节一致：
+  //      left = viewRect.left - 文档已滚距离，width = 正文全宽
+  //    代入原式即得 r = 已滚距离、a = 可见区宽度，页数与 mapping 全部对上。
+  //    只替换 paginatedLocation 调用期间的 position，isVisible()/offset() 等其它
+  //    调用方仍走原实现，不牵连。
+  //    顺带修 view.width()：原生模型里它就是「正文全宽」（iframe 被撑开后的宽度），
+  //    钉住 iframe 后 _width 只剩舞台宽，总页数会被算成 1 页，进度条直接失真。
+  function readerPatchLocation(mgr) {
+    if (mgr.__rdLocPatched) return;
+    const proto = mgr.View && mgr.View.prototype;
+    if (!proto || typeof mgr.paginatedLocation !== 'function') return;
+    mgr.__rdLocPatched = true;
+
+    const origWidth = proto.width;
+    proto.width = function () {
+      const d = this.iframe && this.iframe.contentDocument;
+      if (d) { const w = readerScrollTarget(d).scrollWidth; if (w > 0) return w; }
+      return origWidth.call(this);
+    };
+
+    const origPos = proto.position;
+    const origPL = mgr.paginatedLocation;
+    mgr.paginatedLocation = function () {
+      proto.position = function () {
+        const r = origPos.call(this);
+        const d = this.iframe && this.iframe.contentDocument;
+        if (!d) return r;
+        const t = readerScrollTarget(d);
+        const w = t.scrollWidth || r.width;
+        const left = r.left - t.scrollLeft;
+        return { left, right: left + w, top: r.top, bottom: r.bottom, width: w, height: r.height, x: left, y: r.top };
+      };
+      try { return origPL.call(this); } finally { proto.position = origPos; }
+    };
+  }
+
+  // 5) 保住阅读位置：epub.js 每次上报进度都会走 currentLocation() → updateLayout()，
+  //    而 updateLayout() 的尽头是 contents.viewport()，它末尾有一句
+  //    window.scrollTo(0,0)。原模型里滚动在外层容器、iframe 内文档本来就是 0，
+  //    这一句毫无存在感；我们把翻页改成滚 iframe 内文档之后，它就成了「刚翻过去就被弹回
+  //    开头」的元凶（实测：scrollBy 后读到 750，16ms 后滚动事件报 0，页面纹丝不动）。
+  //    这里在 updateLayout 前后把文档滚动位置接住。换章那种有意的归零走的是
+  //    manager.clear()/scrollTo()，不经过 updateLayout，不受影响。
+  function readerKeepScrollOnRelayout(mgr) {
+    if (mgr.__rdKeepPatched) return;
+    mgr.__rdKeepPatched = true;
+    const orig = mgr.updateLayout;
+    mgr.updateLayout = function () {
+      const d = readerFrameDoc();
+      const keep = d ? readerScrollTarget(d).scrollLeft : 0;
+      const r = orig.apply(this, arguments);
+      if (d && keep > 0 && readerFrameDoc() === d) {
+        try { readerScrollTarget(d).scrollLeft = keep; } catch (e) { /* ignore */ }
+      }
+      return r;
+    };
+  }
+
+  // 当前 iframe 里的文档（没有就返回 null）
+  // 必须优先认 manager 当前 view 的 iframe：换章的一瞬间舞台里会有两个 iframe
+  // （旧 view 还没回收），querySelector 只会拿到最前面那个——翻页就翻到了「已经不显示的
+  // 那一页」上，表现为点了没反应。实在拿不到 view 再退回按选择器找。
+  function readerFrameDoc() {
+    try {
+      const mgr = RD.rendition && RD.rendition.manager;
+      const view = mgr && mgr.views && mgr.views.last ? mgr.views.last() : null;
+      const f = (view && view.iframe) || document.querySelector('#rd-stage iframe');
+      return f && f.contentDocument ? f.contentDocument : null;
+    } catch (e) { return null; }
+  }
+
+  // 版式/窗口变化后要保住阅读位置。resize 会让 epub.js 重排正文（列宽、总宽全变），
+  // iframe 钉住之后文档滚动位置会被重排带跑——实测缩放窗口后直接回到本章开头。
+  // 做法：resize 前记下当前 CFI，重排完按 CFI 重新落位；同一章内只是滚过去，不重渲染。
+  function readerResize(w, h) {
+    const rend = RD.rendition;
+    if (!rend) return;
+    const loc = rend.location;
+    const cfi = loc && loc.start && loc.start.cfi;
+    try { rend.resize(Math.max(240, w), Math.max(200, h)); } catch (e) { /* ignore */ }
+    if (!cfi) return;
+    // 重排是异步的：resize 刚返回时正文还没按新列宽排好，这时按 CFI 落位会算到错误
+    // 的偏移（实测一半概率落回本章开头）。等文档总宽连续两次采样不变再落位，且只落一次
+    // ——display(cfi) 不幂等，重复调用会一页页往前飘。
+    let tries = 0, lastW = -1, stable = 0;
+    const tick = () => {
+      if (RD.rendition !== rend) return;      // 已经换了书，别再插手
+      const d = readerFrameDoc();
+      const sw = d ? readerScrollTarget(d).scrollWidth : -1;
+      stable = (sw > 0 && sw === lastW) ? stable + 1 : 0;
+      lastW = sw;
+      if (stable < 1 && ++tries < 20) { setTimeout(tick, 60); return; }
+      try {
+        const p = rend.display(cfi);
+        if (p && typeof p.catch === 'function') p.catch(() => { /* 落位失败不影响阅读 */ });
+      } catch (e) { /* ignore */ }
+    };
+    setTimeout(tick, 120);
+  }
+
+  // 把 iframe 钉在当前舞台尺寸上（内容钩子每次触发都调，resize/换章后自动跟上）
+  function readerPinFrame(doc, rendition) {
+    try {
+      const frame = doc && doc.defaultView && doc.defaultView.frameElement;
+      const mgr = rendition && rendition.manager;
+      const w = (mgr && mgr.layout && mgr.layout.width) || (rendition && rendition.settings.width);
+      const h = (mgr && mgr.layout && mgr.layout.height) || (rendition && rendition.settings.height);
+      if (frame && w && h) {
+        frame.style.setProperty('width', w + 'px', 'important');
+        frame.style.setProperty('height', h + 'px', 'important');
+      }
+    } catch (e) { /* ignore */ }
+  }
+
   async function readerOpen(key) {
     let meta;
     try {
@@ -1715,6 +1942,7 @@
       });
       RD.rendition = rendition;
       readerApplyPrefs(true);
+      const paginated = (prefs.flow || 'paginated') !== 'scrolled';
       // 划线的样式：epub.js 把正文渲染在 iframe 里，主题样式管不到它，
       // 用官方提供的 content 钩子把样式注进正文文档（class: rd-hl）
       rendition.hooks.content.register((contents) => {
@@ -1726,9 +1954,28 @@
           + '.rd-dark .rd-hl{background:rgba(255,213,79,.32)}'
           // 个别书（尤其 Calibre 转出来的 MOBI→EPUB）有超宽元素会把文档撑到几万像素，
           // 既拖慢渲染又让翻页分区错乱——这里统一把内容宽度摁在视口内。
-          + 'html,body{max-width:100%!important;overflow-x:hidden!important}'
+          + (paginated
+            // 分页模式：iframe 已被钉在舞台尺寸，多列正文溢出文档盒，根视口就是滚动器
+            // （翻页滚的是 documentElement.scrollLeft）。两条铁律（都有实测背书）：
+            //  1) html 的 overflow 必须是 visible。只要 html 带上任何非 visible 的
+            //     overflow（不少书自带 CSS 就有 html{overflow-x:hidden}），body 的
+            //     溢出就不再向视口传播，根视口的可滚区域整个塌掉——scrollWidth 塌成
+            //     视口宽、scrollLeft 赋值静默失效，症状正是「翻几页后没内容」。
+            //     这里用 !important 压过书样式表，跟样式表加载先后无关，消除竞态。
+            //  2) body 的 overflow-x 显式 visible、overflow-y 保持 hidden：按规范
+            //     visible+hidden 会计算成 auto 并向视口传播，视口成为滚动器；若书
+            //     样式把 body 摁成 hidden/hidden，溢出既不传播也不可滚，文档僵死。
+            ? 'html{overflow:visible!important;scrollbar-width:none;-ms-overflow-style:none}'
+              + 'html::-webkit-scrollbar{width:0;height:0;display:none}'
+              + 'body{overflow-x:visible!important;overflow-y:hidden!important}'
+            : 'html,body{max-width:100%!important;overflow-x:hidden!important}')
           + 'img,svg,table,pre,figure{max-width:100%!important;box-sizing:border-box}';
         doc.head.appendChild(style);
+        if (paginated) {
+          // manager/容器此时必然已就绪；万一之前没装上（极端时序），这里兜底
+          readerInstallPaging(rendition);
+          readerPinFrame(doc, rendition);
+        }
         // 翻页手势必须挂在 iframe 内部文档上——iframe 里的点击/滚轮/触摸不会冒泡到外层 #rd-stage。
         // 分区基准用「可见视口（舞台宽度）」而非文档滚动宽度，避免文档被撑宽时左右区判断错乱。
         if (doc.body) bindContentGestures(doc);
@@ -1739,6 +1986,14 @@
       const nav = await book.loaded.navigation;
       RD.toc = (nav && nav.toc) || [];
       readerRenderToc(RD.toc);
+
+      // 分页模式换「钉 iframe + 滚文档」的稳定翻页引擎，见 readerInstallPaging 的注释。
+      // 必须赶在 display() 之前：epub.js 的 expand() 在 view.display() 里同步调用，
+      // 而 manager 是 start() 里排队异步创建的——等 started 之后才装得上。
+      if (paginated) {
+        try { await rendition.started; } catch (e) { /* started 失败也会在下面重试 */ }
+        readerInstallPaging(rendition);
+      }
 
       const last = (meta.last && meta.last.cfi) ? meta.last.cfi : null;
       await rendition.display(last || undefined);
@@ -1954,7 +2209,7 @@ const readerSpeech = (() => {
     const stage = $('#rd-stage');
     stage.style.maxWidth = prefs.width ? (prefs.width + 'px') : '';
     try {
-      RD.rendition.resize(Math.max(240, stage.clientWidth), Math.max(200, stage.clientHeight));
+      readerResize(stage.clientWidth, stage.clientHeight);
     } catch (e) { /* ignore */ }
 
     if (!initial) {
@@ -2293,7 +2548,7 @@ const readerSpeech = (() => {
       rzTimer = setTimeout(() => {
         const stage = $('#rd-stage');
         try {
-          RD.rendition.resize(Math.max(240, stage.clientWidth), Math.max(200, stage.clientHeight));
+          readerResize(stage.clientWidth, stage.clientHeight);
         } catch (e) { /* ignore */ }
       }, 150);
     });
@@ -2363,18 +2618,26 @@ const readerSpeech = (() => {
       if (readerAnyDrawerOpen()) return;
       if (_rdPrefs().flow === 'scrolled') return;   // 滚动模式：交给原生滚动
       if (e.ctrlKey) return;                          // Ctrl+滚轮是缩放，不拦
-      if (Math.abs(e.deltaY) < 6) return;
+      // 横向滚轮（Shift+滚轮/触控板横滑）也会原生滚动文档，一并按翻页处理
+      const ax = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (Math.abs(ax) < 6) return;
       const now = Date.now();
       if (now - wheelLock < 520) { e.preventDefault(); return; }   // 一次拨动 = 一页
       e.preventDefault();
       wheelLock = now;
-      readerGo(e.deltaY > 0 ? 1 : -1);
+      readerGo(ax > 0 ? 1 : -1);
     }, { passive: false });
 
     // 触摸滑动翻页（移动端/平板）：横向滑 -> 翻页，纵向滑 -> 正常滚动
     doc.addEventListener('touchstart', (e) => {
       const t = e.touches[0]; downX = t.clientX; downY = t.clientY; swiped = false;
     }, { passive: true });
+    // 横向拖动时拦掉原生滚动——否则文档会被原生滚一段，翻页又滚一页，位置就歪了
+    doc.addEventListener('touchmove', (e) => {
+      if (!RD.ready || _rdPrefs().flow === 'scrolled') return;
+      const t = e.touches[0];
+      if (Math.abs(t.clientX - downX) > Math.abs(t.clientY - downY) + 4) e.preventDefault();
+    }, { passive: false });
     doc.addEventListener('touchend', (e) => {
       if (!RD.ready) return;
       const t = e.changedTouches[0];
@@ -2383,6 +2646,11 @@ const readerSpeech = (() => {
       if (dx < -50) { swiped = true; readerGo(1); }
       else if (dx > 50) { swiped = true; readerGo(-1); }
     }, { passive: true });
+
+    // End/Home 会把文档直接滚到尽头，和「一次一页」的翻页模型冲突，拦掉
+    doc.addEventListener('keydown', (e) => {
+      if (e.key === 'End' || e.key === 'Home') e.preventDefault();
+    });
   }
 
   async function load(force) {
