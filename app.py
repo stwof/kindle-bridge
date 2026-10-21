@@ -13,6 +13,7 @@ import base64
 import json
 import os
 import posixpath
+import re
 import sys
 import threading
 import time
@@ -196,6 +197,12 @@ class Handler(BaseHTTPRequestHandler):
         path = unquote(urlparse(self.path).path)
         if path in ("/", "/index.html"):
             return self._static("index.html")
+        if path == "/favicon.ico":
+            # 浏览器总会来要这个，给个 1x1 透明 PNG，省得控制台里挂一条 404
+            return self._send(200, bytes.fromhex(
+                "89504e470d0a1a0a0000000d494844520000000100000001080600000"
+                "01f15c4890000000d4944415478da63fcffff3f0300050001a5f645bf"
+                "0000000049454e44ae426082"), "image/png", {"Cache-Control": "max-age=86400"})
         if path == "/api/status":
             data = collect()
             return self._json({
@@ -234,6 +241,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._reader_meta(urlparse(self.path).query)
         if path == "/api/reader/epub":
             return self._reader_epub(urlparse(self.path).query)
+        m_book = re.match(r"^/api/reader/book/([0-9a-f]{16})\.epub$", path)
+        if m_book:
+            return self._reader_epub("key=" + m_book.group(1))
         if path == "/api/reader/cover":
             return self._reader_cover(urlparse(self.path).query)
         return self._static(path.lstrip("/"))
@@ -857,6 +867,11 @@ class Handler(BaseHTTPRequestHandler):
             "drm": m["drm"], "ext": ext,
             "needs_convert": ext != ".epub",
             "cover": f"/api/reader/cover?key={key}" if has_cover else "",
+            # 关键：epub.js 靠 URL 后缀判断「打包文件」还是「散装目录」。
+            # 结尾不是 .epub 时它会当成散装目录，去请求 <基址>/META-INF/container.xml
+            # （这里就成了 /api/reader/META-INF/container.xml）→ 404 → 白屏。
+            # 所以给阅读器一条以 .epub 结尾的地址；epub_url 留给「下载」用。
+            "book_url": f"/api/reader/book/{key}.epub",
             "epub_url": f"/api/reader/epub?key={key}",
             "last": reader_mod.load_progress().get(key) or {},
             "annotations": reader_mod.annots_of(key),

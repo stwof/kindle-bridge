@@ -193,9 +193,15 @@ def main() -> int:
     print("B. 设备上的真实亚马逊文件")
     print("=" * 78)
     real = []
-    for n in sorted(os.listdir(DEVICE)):
-        if n.lower().endswith((".kfx", ".azw3", ".azw")):
-            real.append(os.path.join(DEVICE, n))
+    # 没连 Kindle 时 E:\documents 根本不存在，这一段只能跳过 —— 不然整个测试
+    # 会以 FileNotFoundError 崩掉，让人误以为代码坏了。
+    if not os.path.isdir(DEVICE):
+        print(f"  [SKIP] 没检测到 Kindle 设备目录 {DEVICE}，跳过「设备上的真实文件」")
+        real = []
+    else:
+        for n in sorted(os.listdir(DEVICE)):
+            if n.lower().endswith((".kfx", ".azw3", ".azw")):
+                real.append(os.path.join(DEVICE, n))
     for p in real:
         r = M.inspect_mobi(p)
         print(f"  {os.path.basename(p)[:46]:<48} {r['format']:<6} drm={str(r['drm']):<5} "
@@ -203,11 +209,14 @@ def main() -> int:
               f"压缩={r['compression']:<9} 编码={r['encoding']}")
     kfx = [p for p in real if p.lower().endswith(".kfx")]
     azw = [p for p in real if p.lower().endswith((".azw", ".azw3"))]
-    check(len(kfx) >= 1 and all(M.inspect_mobi(p)["format"] == "KFX" for p in kfx),
-          "所有真实 kfx 都应判为 KFX")
-    check(all(M.inspect_mobi(p)["drm"] for p in real), "真实亚马逊文件应全部判出 DRM")
-    check(all(not M.inspect_mobi(p)["kindle_ready"] for p in real),
-          "带 DRM 的真实文件都不应可外投")
+    if not real:
+        print("  [SKIP] 设备目录里没有 kfx/azw 文件，这三条依赖真实文件的断言一并跳过")
+    else:
+        check(len(kfx) >= 1 and all(M.inspect_mobi(p)["format"] == "KFX" for p in kfx),
+              "所有真实 kfx 都应判为 KFX")
+        check(all(M.inspect_mobi(p)["drm"] for p in real), "真实亚马逊文件应全部判出 DRM")
+        check(all(not M.inspect_mobi(p)["kindle_ready"] for p in real),
+              "带 DRM 的真实文件都不应可外投")
 
     print("\n" + "=" * 78)
     if fails:

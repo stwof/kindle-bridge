@@ -1555,7 +1555,7 @@
   let RD_LIST = [];
   const RD = {
     key: null, meta: null, book: null, rendition: null, toc: [],
-    chapter: '', percent: 0, cfi: '', sel: null, saving: 0,
+    chapter: '', percent: 0, cfi: '', sel: null, saving: 0, ready: false,
   };
 
   const _rdPrefs = () => {
@@ -1676,7 +1676,7 @@
         $('#rd-loading').classList.remove('show');
         return toast('阅读器组件还没加载好（epub.js），刷新页面再试');
       }
-      const book = ePub(meta.epub_url);
+      const book = ePub(meta.book_url || meta.epub_url);
       RD.book = book;
       const rendition = book.renderTo('rd-stage', {
         method: prefs.flow === 'scrolled' ? 'continuous' : 'default',
@@ -1706,22 +1706,186 @@
       RD.toc = (nav && nav.toc) || [];
       readerRenderToc(RD.toc);
 
-      try { await book.locations.generate(1200); } catch (e) { /* 没有 locations 也能读，只是没百分比 */ }
-
       const last = (meta.last && meta.last.cfi) ? meta.last.cfi : null;
       await rendition.display(last || undefined);
-      await rendition.display(last || undefined);   // 再显示一次，避免 cfi 还没就绪导致空页
+      RD.ready = true;
+      $('#rd-loading').classList.remove('show');
+
+      // locations 是用来算「读到百分之几」的，比较慢，放到首屏之后后台算，
+      // 免得整本书要等它算完才看得到字。
+      try {
+        await book.locations.generate(1200);
+        if (RD.cfi) readerOnRelocated({ start: { cfi: RD.cfi, href: (RD.chapter || '') } });
+      } catch (e) { /* 没有 locations 也能读，只是进度条没有百分比 */ }
 
       // 把以前存的划线重新画上
       for (const a of (meta.annotations || [])) {
         if (!a.cfi) continue;
         try { rendition.annotations.add('highlight', a.cfi, null, null, 'rd-hl'); } catch (e) { /* 失效的 cfi 跳过 */ }
       }
-      $('#rd-loading').classList.remove('show');
     } catch (e) {
+      RD.ready = false;
       $('#rd-loading').classList.remove('show');
       toast('打开失败：' + e.message);
+      console.error('[reader] 打开失败', e);
     }
+  }
+
+  /* ---------- 朗读 ----------
+   * 两条路子：
+   *  1) 本机 Coqui TTS（/api/tts）—— 音质好、完全离线，但要先装（Python 3.9~3.11）；
+   *  2) 浏览器自带的 speechSynthesis —— 装个浏览器就有，音质一般但零配置。
+   * 有 1 用 1，没有就退到 2，并在界面上说清楚现在用的是哪一种。
+   */
+const readerSpeech = (() => {
+  const S = {
+    on: false, engine: '', audio: null, seq: 0, voices: [], ttsOK: null,
+  };
+
+  function setBar(text) {
+    const bar = $('#rd-speech');
+    if (!bar) return;
+    bar.hidden = !text;
+    const t = $('#rd-speech-text');
+    if (t && text) t.textContent = text;
+  }
+
+  // 朗读中把顶部按钮变成「停止」，别让人以为点了没反应
+  function setBtn(on) {
+    const b = $('#rd-read');
+    if (b) b.textContent = on ? '⏹ 停止' : '🔊 朗读';
+  }
+
+  // 当前 iframe 里可见的正文（去掉脚本样式和导航类噪声）
+  function currentText() {
+    const f = document.querySelector('#rd-stage iframe');
+    if (!f) return '';
+    let doc = null;
+    try { doc = f.contentDocument; } catch (e) { return ''; }
+    if (!doc || !doc.body) return '';
+    const clone = doc.body.cloneNode(true);
+    clone.querySelectorAll('script,style,nav,svg').forEach((n) => n.remove());
+    return (clone.textContent || '').replace(/\s+/g, ' ').trim();
+  }
+
+  async function ttsReady() {
+    if (S.ttsOK !== null) return S.ttsOK;
+    try {
+      const st = await (await api('/api/status')).json();
+      S.ttsOK = !!(st && st.tts && st.tts.available);
+    } catch (e) { S.ttsOK = false; }
+    return S.ttsOK;
+  }
+
+  // —— 本机 TTS：一次一页，播完看要不要续读下一页 ——
+  async function speakPage(text, mySeq) {
+    let res;
+    try {
+      res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+    } catch (e) {
+      return false;                       // 网络/服务掉了，交给调用方回落
+    }
+    if (!res.ok) return false;
+    const blob = await res.blob();
+    if (mySeq !== S.seq) return false;    // 期间用户又点了别的，这段作废
+    return await new Promise((resolve) => {
+      const url = URL.createObjectURL(blob);
+      const a = new Audio(url);
+      S.audio = a;
+      a.onended = () => { URL.revokeObjectURL(url); resolve(true); };
+      a.onerror = () => { URL.revokeObjectURL(url); resolve(false); };
+      a.play().catch(() => { URL.revokeObjectURL(url); resolve(false); });
+    });
+  }
+
+  // —— 浏览器语音：直接把整段丢给 speechSynthesis ——
+  function speakBrowser(text) {
+    return new Promise((resolve) => {
+      if (!('speechSynthesis' in window)) { resolve(false); return; }
+      if (!S.voices.length) {
+        try { S.voices = window.speechSynthesis.getVoices() || []; } catch (e) { S.voices = []; }
+      }
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'zh-CN';
+      u.rate = 1.0;
+      const zh = S.voices.find((v) => /zh|cmn|Chinese/i.test(v.lang || '') || /Chinese|中文|普通话/i.test(v.name || ''));
+      if (zh) u.voice = zh;
+      let done = false;
+      const fin = (okv) => { if (!done) { done = true; resolve(okv); } };
+      u.onend = () => fin(true);
+      u.onerror = () => fin(false);
+      try { window.speechSynthesis.speak(u); } catch (e) { fin(false); return; }
+      // 有些实现不触发 onend（例如被新话打断），兜个底
+      setTimeout(() => fin(S.engine === 'browser'), Math.max(8000, text.length * 220));
+    });
+  }
+
+  async function speakText(text, label) {
+    if (!text) { toast('这一页没有可朗读的文字'); return; }
+    stop();
+    S.on = true;
+    setBtn(true);
+    const mySeq = ++S.seq;
+    setBar(label || '正在准备…');
+    if (await ttsReady()) {
+      S.engine = 'tts';
+      setBar('朗读中（本机 TTS）…');
+      const ok = await speakPage(text, mySeq);
+      if (mySeq !== S.seq) return;
+      if (ok) { setBar('本页读完'); onPageDone(); return; }
+      // TTS 掉链子就退到浏览器语音，别让用户干等
+      S.engine = 'browser';
+      setBar('本机 TTS 不可用，改用浏览器语音…');
+    } else {
+      S.engine = 'browser';
+      setBar('朗读中（浏览器语音）…');
+      await speakBrowser(text);
+      if (mySeq !== S.seq) return;
+      onPageDone();
+    }
+  }
+
+  // 当前页读完：勾了自动续读就翻页接着读
+  function onPageDone() {
+    const box = $('#rd-speech-auto');
+    if (!S.on || !box || !box.checked) { stop(true); return; }
+    const before = RD.cfi;
+    readerGo(1, false);
+    setTimeout(() => {
+      if (S.on && RD.cfi !== before) {
+        const t = currentText();
+        if (t) speakText(t, '朗读中（续读下一页）…');
+        else stop(true);
+      }
+    }, 900);
+  }
+
+  function stop(quiet) {
+    S.seq++;
+    S.on = false;
+    if (S.audio) { try { S.audio.pause(); } catch (e) { /* ignore */ } S.audio = null; }
+    try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
+    setBar('');
+    setBtn(false);
+  }
+
+  return { speakText, stop, currentText, isOn: () => S.on };
+})();
+
+  // 自动续读时由朗读器自己翻页，这时不能顺手把朗读停了（byUser=false）
+  function readerGo(dir, byUser) {
+    // 内容没就绪时调 next()/prev() 会抛 "Cannot read properties of undefined"，
+    // 在 epub.js 内部炸掉，这里挡一下。
+    if (!RD.ready || !RD.rendition) return;
+    if (byUser !== false) readerSpeech.stop();
+    try {
+      const p = dir > 0 ? RD.rendition.next() : RD.rendition.prev();
+      if (p && p.catch) p.catch(() => { /* 已经到最后一页了，忽略 */ });
+    } catch (e) { /* 同上 */ }
   }
 
   function readerApplyPrefs(initial) {
@@ -1906,6 +2070,7 @@
 
   function readerClose() {
     readerSaveProgress(true);
+    readerSpeech.stop();
     $('#reader-overlay').hidden = true;
     document.body.classList.remove('rd-open');
     readerCloseDrawers();
@@ -1915,6 +2080,7 @@
     RD.rendition = null;
     RD.key = null;
     RD.meta = null;
+    RD.ready = false;
     const stage = $('#rd-stage');
     [...stage.children].forEach((c) => { if (c.id !== 'rd-loading') c.remove(); });
     $('#rd-loading').classList.remove('show');
@@ -1927,8 +2093,21 @@
     $('#reader-q').addEventListener('input', () => renderShelf(RD_LIST));
 
     $('#rd-back').addEventListener('click', readerClose);
-    $('#rd-prev').addEventListener('click', () => RD.rendition && RD.rendition.prev());
-    $('#rd-next').addEventListener('click', () => RD.rendition && RD.rendition.next());
+    $('#rd-prev').addEventListener('click', () => readerGo(-1));
+    $('#rd-next').addEventListener('click', () => readerGo(1));
+    $('#rd-read').addEventListener('click', () => {
+      if (readerSpeech.isOn()) { readerSpeech.stop(); return; }
+      const t = readerSpeech.currentText();
+      if (!t) { toast('这一页没有可朗读的文字'); return; }
+      readerSpeech.speakText(t, '正在准备…');
+    });
+    $('#rd-speech-stop').addEventListener('click', () => readerSpeech.stop());
+    $('#rd-sel-read').addEventListener('click', () => {
+      const text = RD.sel && RD.sel.text;
+      if (!text) { toast('先选中一段文字'); return; }
+      $('#rd-selbar').hidden = true;
+      readerSpeech.speakText(text, '朗读选中的句子…');
+    });
     $('#rd-toc').addEventListener('click', () => readerToggleDrawer('#rd-toc-drawer'));
     $('#rd-notes').addEventListener('click', () => readerToggleDrawer('#rd-notes-drawer'));
     $('#rd-settings').addEventListener('click', () => readerToggleDrawer('#rd-settings-panel'));
@@ -1994,8 +2173,14 @@
     document.addEventListener('keydown', (e) => {
       if ($('#reader-overlay').hidden) return;
       if (e.key === 'Escape') { readerClose(); }
-      else if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); RD.rendition && RD.rendition.next(); }
-      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); RD.rendition && RD.rendition.prev(); }
+      else if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); readerGo(1); }
+      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); readerGo(-1); }
+      else if (e.key === ' ' && !e.target.closest('input,textarea,select')) { e.preventDefault(); readerGo(e.shiftKey ? -1 : 1); }
+      else if (e.key === 'r' || e.key === 'R') {
+        if (e.target.closest('input,textarea,select')) return;
+        e.preventDefault();
+        $('#rd-read').click();
+      }
     });
 
     let rzTimer = 0;

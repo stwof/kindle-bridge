@@ -226,6 +226,34 @@ chk(not R.add_annot(CK, "   ").get("ok"), "空白标注拒绝")
 chk(not R.add_annot("bad", "有字").get("ok"), "非法 key 的标注拒绝")
 
 # ---------------------------------------------------------------------------
+section("给前端的关键约定：book_url 必须以 .epub 结尾")
+# 直接读源码做静态断言：这几条一旦被改回去，阅读器就会白屏，
+# 但单测跑不到浏览器，必须在这里钉住。
+with open(os.path.join(ROOT, "app.py"), encoding="utf-8") as f:
+    app_src = f.read()
+with open(os.path.join(ROOT, "web", "app.js"), encoding="utf-8") as f:
+    web_src = f.read()
+# epub.js 靠 URL 后缀判断「打包文件」还是「散装目录」：不是 .epub 结尾时它会
+# 去请求 <基址>/META-INF/container.xml，在本项目里就成了 /api/reader/META-INF/container.xml
+# → 404 → TypeError: Cannot read properties of undefined (reading 'next') → 白屏打不开。
+# 这是「打开书失败」的真正根因。
+chk(app_src.count('r"^/api/reader/book/([0-9a-f]{16})\\.epub$"') == 1,
+    "后端注册了 /api/reader/book/{key}.epub 路由")
+chk('"book_url": f"/api/reader/book/{key}.epub"' in app_src,
+    "meta 里给出以 .epub 结尾的 book_url")
+chk("meta.book_url || meta.epub_url" in web_src,
+    "前端优先用 book_url 打开（老数据回落到 epub_url）")
+chk("readerSpeech" in web_src and "/api/tts" in web_src,
+    "阅读器内含朗读能力（复用 /api/tts）")
+chk("speechSynthesis" in web_src,
+    "TTS 不可用时回落到浏览器内置语音")
+chk("$('#rd-speech')" in web_src and "rd-speech-auto" in web_src,
+    "朗读状态条与自动续读开关已接线")
+# 就绪守卫：内容没加载好就 next()/prev() 会在 epub.js 内部抛异常
+chk("if (!RD.ready || !RD.rendition) return;" in web_src,
+    "翻页前有就绪守卫")
+
+# ---------------------------------------------------------------------------
 print(f"\n=== 阅读器测试：{ok} 通过 / {fail} 失败 ===")
 shutil.rmtree(TMP, ignore_errors=True)
 sys.exit(1 if fail else 0)

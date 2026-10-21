@@ -360,6 +360,7 @@
     <div class="rd-top-actions">
       <button id="rd-toc" class="ghost" title="目录">☰ 目录</button>
       <button id="rd-notes" class="ghost" title="标注">✎ 标注</button>
+      <button id="rd-read" class="ghost" title="朗读本页（快捷键 R）">🔊 朗读</button>
       <button id="rd-settings" class="ghost" title="阅读设置">Aa 设置</button>
     </div>
   </div>
@@ -378,9 +379,21 @@
     <span id="rd-pct" class="hint">0%</span>
   </div>
 
+  <!-- 朗读状态条：正在读哪一页 / 用什么引擎 -->
+  <div class="rd-speech" id="rd-speech" hidden>
+    <span class="rd-speech-dot"></span>
+    <span id="rd-speech-text">朗读中…</span>
+    <span class="rd-spacer"></span>
+    <label class="rd-speech-opt" title="读完本页自动翻到下一页继续读">
+      <input type="checkbox" id="rd-speech-auto"> 自动续读
+    </label>
+    <button id="rd-speech-stop" class="ghost">停止</button>
+  </div>
+
   <!-- 选中文字后的浮动工具条 -->
   <div class="rd-selbar" id="rd-selbar" hidden>
     <button id="rd-sel-hl" class="primary">划线并保存</button>
+    <button id="rd-sel-read" class="ghost">🔊 朗读</button>
     <button id="rd-sel-copy" class="ghost">复制</button>
   </div>
 
