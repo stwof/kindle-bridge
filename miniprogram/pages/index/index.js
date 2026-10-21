@@ -31,6 +31,13 @@ Page({
         title: '生词本',
         desc: '把桌面端导出的生词 CSV 转成 Anki 词库。',
         page: '/pages/vocab/vocab'
+      },
+      {
+        key: 'reader',
+        icon: '📖',
+        title: '读 EPUB',
+        desc: '离线阅读器：从微信选一个 .epub，横向滑动翻章，支持目录与主题。',
+        page: '/pages/reader/reader'
       }
     ]
   },

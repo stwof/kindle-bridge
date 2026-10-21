@@ -1,0 +1,89 @@
+<!-- 小程序原生 EPUB 阅读器 -->
+
+<!-- 阅读中 -->
+<view class="reader theme-{{theme}}" wx:if="{{state==='reading'}}">
+  <view class="r-top">
+    <view class="r-back" bindtap="goBack">‹</view>
+    <view class="r-meta">
+      <view class="r-title">{{title}}</view>
+      <view class="r-author" wx:if="{{author}}">{{author}}</view>
+    </view>
+    <view class="r-menu" bindtap="togglePanel">Aa</view>
+    <view class="r-menu" bindtap="openToc">☰</view>
+  </view>
+
+  <scroll-view id="rscroll" class="r-scroll" scroll-y
+    catchtouchstart="onTouchStart" catchtouchend="onTouchEnd">
+    <view class="r-chapter">{{chapterTitle}}</view>
+    <block wx:for="{{blocks}}" wx:key="idx" wx:for-index="idx">
+      <image wx:if="{{item.type==='img'}}" class="r-img" src="{{item.src}}" mode="widthFix"></image>
+      <view wx:else class="r-p" style="font-size:{{fontSize}}rpx;line-height:{{fontSize*1.7}}rpx">{{item.text}}</view>
+    </block>
+    <view class="r-end">—— 本章完 ——</view>
+  </scroll-view>
+
+  <view class="r-bottom">
+    <view class="r-nav {{hasPrev?'':'r-dis'}}" bindtap="prevChapter">‹ 上一章</view>
+    <view class="r-progress">{{progressText}}</view>
+    <view class="r-nav {{hasNext?'':'r-dis'}}" bindtap="nextChapter">下一章 ›</view>
+  </view>
+
+  <!-- 设置面板 -->
+  <view class="r-mask" wx:if="{{panelOpen}}" bindtap="togglePanel">
+    <view class="r-panel" catchtap="noop">
+      <view class="r-row">
+        <text class="r-label">主题</text>
+        <view class="r-themes">
+          <view class="r-theme t-light {{theme==='light'?'on':''}}" data-theme="light" bindtap="pickTheme">浅</view>
+          <view class="r-theme t-sepia {{theme==='sepia'?'on':''}}" data-theme="sepia" bindtap="pickTheme">护眼</view>
+          <view class="r-theme t-dark {{theme==='dark'?'on':''}}" data-theme="dark" bindtap="pickTheme">深</view>
+        </view>
+      </view>
+      <view class="r-row">
+        <text class="r-label">字号</text>
+        <view class="r-font">
+          <view class="r-fbtn" data-d="-2" bindtap="fontDelta">A-</view>
+          <text class="r-fval">{{fontSize}}</text>
+          <view class="r-fbtn" data-d="2" bindtap="fontDelta">A+</view>
+        </view>
+      </view>
+      <view class="r-hint">左右滑动屏幕可翻章</view>
+    </view>
+  </view>
+
+  <!-- 目录 -->
+  <view class="r-mask" wx:if="{{tocOpen}}" bindtap="closeToc">
+    <view class="r-toc" catchtap="noop">
+      <view class="r-toc-head">目录</view>
+      <scroll-view class="r-toc-body" scroll-y>
+        <view wx:for="{{toc}}" wx:key="i" wx:for-index="i"
+          class="r-toc-item l{{item.level}} {{item.chapter===chapterIndex?'on':''}}"
+          data-i="{{item.chapter}}" bindtap="jumpToc">
+          {{item.title}}
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+</view>
+
+<!-- 空闲：选择文件 -->
+<view class="r-idle" wx:if="{{state==='idle'}}">
+  <view class="r-idle-icon">📖</view>
+  <view class="r-idle-title">离线读 EPUB</view>
+  <view class="r-idle-sub">从微信会话里选一个 .epub 文件，本地解析、本地阅读，不上传任何数据。</view>
+  <button class="r-pick" bindtap="chooseFile">选择 EPUB 文件</button>
+</view>
+
+<!-- 加载中 -->
+<view class="r-loading" wx:if="{{state==='loading'}}">
+  <view class="r-spin"></view>
+  <text>解析中…</text>
+</view>
+
+<!-- 出错 -->
+<view class="r-idle" wx:if="{{state==='error'}}">
+  <view class="r-idle-icon">😕</view>
+  <view class="r-idle-title">打不开</view>
+  <view class="r-idle-sub">{{errorMsg}}</view>
+  <button class="r-pick" bindtap="chooseFile">换一个文件</button>
+</view>

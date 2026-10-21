@@ -1698,6 +1698,8 @@
           + 'padding:0 1px;box-decoration-break:clone;-webkit-box-decoration-break:clone}'
           + '.rd-dark .rd-hl{background:rgba(255,213,79,.32)}';
         doc.head.appendChild(style);
+        // 翻页手势必须挂在 iframe 内部文档上——iframe 里的点击/滚轮/触摸不会冒泡到外层 #rd-stage
+        if (doc.body) bindContentGestures(doc, () => (doc.documentElement.clientWidth || doc.body.clientWidth || 1));
       });
       rendition.on('relocated', readerOnRelocated);
       rendition.on('selected', readerOnSelected);
@@ -1710,6 +1712,16 @@
       await rendition.display(last || undefined);
       RD.ready = true;
       $('#rd-loading').classList.remove('show');
+
+      // 首次进阅读器，提示手势翻页（每个会话只提示一次）
+      if (!window.__rdHintShown) {
+        window.__rdHintShown = true;
+        const hint = $('#rd-gesture-hint');
+        if (hint) {
+          hint.classList.add('show');
+          setTimeout(() => hint.classList.remove('show'), 4200);
+        }
+      }
 
       // locations 是用来算「读到百分之几」的，比较慢，放到首屏之后后台算，
       // 免得整本书要等它算完才看得到字。
@@ -1877,11 +1889,17 @@ const readerSpeech = (() => {
 })();
 
   // 自动续读时由朗读器自己翻页，这时不能顺手把朗读停了（byUser=false）
+  let _turnLock = 0;            // 多源（滚轮/点击/触摸/epub.js 自带）去重，避免一次操作翻两页
   function readerGo(dir, byUser) {
     // 内容没就绪时调 next()/prev() 会抛 "Cannot read properties of undefined"，
     // 在 epub.js 内部炸掉，这里挡一下。
     if (!RD.ready || !RD.rendition) return;
+    const now = Date.now();
+    if (now - _turnLock < 320) return;
+    _turnLock = now;
     if (byUser !== false) readerSpeech.stop();
+    // 供端到端测试断言「翻页确实发生」用的最小钩子（无害）
+    try { if (typeof window !== 'undefined') { window.__rdTurns = (window.__rdTurns || 0) + 1; window.__rdLastDir = dir; window.__rdLastTurn = Date.now(); } } catch (e) {}
     try {
       const p = dir > 0 ? RD.rendition.next() : RD.rendition.prev();
       if (p && p.catch) p.catch(() => { /* 已经到最后一页了，忽略 */ });
@@ -2194,6 +2212,84 @@ const readerSpeech = (() => {
         } catch (e) { /* ignore */ }
       }, 150);
     });
+
+    // —— 翻页手势（点击/滚轮/触摸）挂在 iframe 内部文档上，见 bindContentGestures ——
+  }
+
+  // 抽屉/设置是否开着（开着时不翻页）
+  function readerAnyDrawerOpen() {
+    return !$('#rd-toc-drawer').hidden || !$('#rd-notes-drawer').hidden || !$('#rd-settings-panel').hidden;
+  }
+  // 是否有选区（正在划词，不要当成翻页）
+  function readerHasSelection() {
+    try {
+      const f = document.querySelector('#rd-stage iframe');
+      if (f && f.contentDocument) {
+        const s = f.contentDocument.getSelection && f.contentDocument.getSelection();
+        if (s && s.toString().trim()) return true;
+      }
+    } catch (e) { /* 跨域 iframe 拿不到，忽略 */ }
+    const s = window.getSelection && window.getSelection();
+    return !!(s && s.toString().trim());
+  }
+  // 中点一下：隐藏/显示顶底栏，进入/退出沉浸阅读
+  function readerToggleChrome() {
+    $('#reader-overlay').classList.toggle('rd-hide-ui');
+  }
+
+  function bindContentGestures(doc, widthFn) {
+    if (!doc || doc.__rdGesturesBound) return;
+    doc.__rdGesturesBound = true;
+
+    let downX = 0, downY = 0, dragMoved = false, swiped = false;
+
+    doc.addEventListener('pointerdown', (e) => {
+      downX = e.clientX; downY = e.clientY; dragMoved = false; swiped = false;
+    });
+    doc.addEventListener('pointerup', (e) => {
+      const dx = e.clientX - downX, dy = e.clientY - downY;
+      if (Math.abs(dx) > 12 || Math.abs(dy) > 12) dragMoved = true;
+    });
+
+    // 鼠标点击：左 1/3 上一页，右 1/3 下一页，中间切换顶底栏
+    doc.addEventListener('click', (e) => {
+      if (swiped) { swiped = false; return; }     // 触摸滑动后的合成 click，忽略
+      if (!RD.ready) return;
+      if (readerAnyDrawerOpen() || readerHasSelection() || dragMoved) return;
+      const w = (widthFn && widthFn()) || 1;
+      const x = e.clientX;                         // 相对 iframe 视口
+      if (x < w * 0.34) readerGo(-1);
+      else if (x > w * 0.66) readerGo(1);
+      else readerToggleChrome();
+    });
+
+    // 滚轮翻页（仅在分页模式下拦截；滚动模式放行原生滚动）
+    let wheelLock = 0;
+    doc.addEventListener('wheel', (e) => {
+      if (!RD.ready) return;
+      if (readerAnyDrawerOpen()) return;
+      if (_rdPrefs().flow === 'scrolled') return;   // 滚动模式：交给原生滚动
+      if (e.ctrlKey) return;                          // Ctrl+滚轮是缩放，不拦
+      if (Math.abs(e.deltaY) < 6) return;
+      const now = Date.now();
+      if (now - wheelLock < 520) { e.preventDefault(); return; }   // 一次拨动 = 一页
+      e.preventDefault();
+      wheelLock = now;
+      readerGo(e.deltaY > 0 ? 1 : -1);
+    }, { passive: false });
+
+    // 触摸滑动翻页（移动端/平板）：横向滑 -> 翻页，纵向滑 -> 正常滚动
+    doc.addEventListener('touchstart', (e) => {
+      const t = e.touches[0]; downX = t.clientX; downY = t.clientY; swiped = false;
+    }, { passive: true });
+    doc.addEventListener('touchend', (e) => {
+      if (!RD.ready) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - downX, dy = t.clientY - downY;
+      if (Math.abs(dy) > 100) return;                // 纵向滑动，不当翻页
+      if (dx < -50) { swiped = true; readerGo(1); }
+      else if (dx > 50) { swiped = true; readerGo(-1); }
+    }, { passive: true });
   }
 
   async function load(force) {

@@ -209,6 +209,49 @@ async function getPageWsUrl() {
     ok('正文文本非空', b.len > 20, '正文字符数=' + b.len + (b.err ? ' (' + b.err + ')' : '样本=' + b.sample));
     await shot('03b-text');
 
+    console.log('\n【5】手势翻页（点击 / 滚轮 / 滑动）');
+    const rect = await cdp.eval(`return (function(){
+      const s=document.querySelector('#rd-stage'); const r=s.getBoundingClientRect();
+      return JSON.stringify({l:r.left,t:r.top,w:r.width,h:r.height});})()`);
+    const R = JSON.parse(rect);
+    const turnsBefore = await cdp.eval('return window.__rdTurns||0');
+
+    // 鼠标右键区点击 -> 下一页
+    const cx = Math.round(R.l + R.w * 0.85), cy = Math.round(R.t + R.h * 0.5);
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: cx, y: cy, button: 'left', clickCount: 1 });
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: cx, y: cy, button: 'left', clickCount: 1 });
+    await sleep(700);
+    const afterClick = await cdp.eval('return {n:window.__rdTurns||0, d:window.__rdLastDir}');
+    ok('鼠标右区点击 -> 下一页', afterClick.n > turnsBefore && afterClick.d === 1, JSON.stringify(afterClick));
+
+    // 鼠标左键区点击 -> 上一页
+    const cx2 = Math.round(R.l + R.w * 0.15);
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: cx2, y: cy, button: 'left', clickCount: 1 });
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: cx2, y: cy, button: 'left', clickCount: 1 });
+    await sleep(700);
+    const afterLeft = await cdp.eval('return window.__rdLastDir');
+    ok('鼠标左区点击 -> 上一页', afterLeft === -1, 'dir=' + afterLeft);
+
+    // 滚轮向下 -> 下一页
+    const turnsWheel = await cdp.eval('return window.__rdTurns||0');
+    await cdp.send('Input.dispatchMouseEvent', {
+      type: 'mouseWheel', x: Math.round(R.l + R.w / 2), y: cy,
+      deltaX: 0, deltaY: 140,
+    });
+    await sleep(700);
+    const afterWheel = await cdp.eval('return {n:window.__rdTurns||0, d:window.__rdLastDir}');
+    ok('滚轮向下 -> 下一页', afterWheel.n > turnsWheel && afterWheel.d === 1, JSON.stringify(afterWheel));
+
+    // 触摸横向滑动 -> 下一页
+    const turnsTouch = await cdp.eval('return window.__rdTurns||0');
+    const sx = Math.round(R.l + R.w * 0.8), ex = Math.round(R.l + R.w * 0.2);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: sx, y: cy }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await sleep(700);
+    const afterTouch = await cdp.eval('return {n:window.__rdTurns||0, d:window.__rdLastDir}');
+    ok('触摸左滑 -> 下一页', afterTouch.n > turnsTouch && afterTouch.d === 1, JSON.stringify(afterTouch));
+    await shot('03c-gestures');
+
     console.log('\n【6】目录抽屉');
     const tocN = await cdp.eval(`return (window.__rd && window.__rd.toc) ? window.__rd.toc.length : (document.querySelectorAll('#rd-toc-drawer li').length)`);
     ok('目录已生成', tocN >= 0, '目录项=' + tocN);

@@ -1,0 +1,83 @@
+/* 阅读器样式：三种主题通过 theme-* 类切换背景/文字 */
+
+.reader { display: flex; flex-direction: column; height: 100vh; }
+.theme-light { background: #f6f5f1; color: #1c1c1a; }
+.theme-sepia { background: #f3e9d2; color: #4a3f30; }
+.theme-dark  { background: #161616; color: #d6d4ce; }
+
+.r-top {
+  display: flex; align-items: center; padding: 16rpx 20rpx;
+  border-bottom: 1rpx solid rgba(128,128,128,.2);
+}
+.r-back, .r-menu {
+  width: 72rpx; height: 72rpx; line-height: 72rpx; text-align: center;
+  font-size: 40rpx; border-radius: 12rpx;
+}
+.r-menu { font-size: 34rpx; margin-left: 8rpx; }
+.r-meta { flex: 1; overflow: hidden; padding: 0 12rpx; }
+.r-title { font-size: 30rpx; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r-author { font-size: 22rpx; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.r-scroll { flex: 1; padding: 28rpx 40rpx; box-sizing: border-box; }
+.r-chapter { font-size: 40rpx; font-weight: 700; margin: 8rpx 0 28rpx; text-align: center; }
+.r-p { margin-bottom: 28rpx; text-align: justify; letter-spacing: 1rpx; }
+.r-img { width: 100%; margin: 16rpx 0; border-radius: 8rpx; }
+.r-end { text-align: center; opacity: .4; font-size: 24rpx; margin: 40rpx 0; }
+
+.r-bottom {
+  display: flex; align-items: center; padding: 14rpx 20rpx;
+  border-top: 1rpx solid rgba(128,128,128,.2);
+}
+.r-nav { font-size: 28rpx; padding: 10rpx 18rpx; border-radius: 10rpx; }
+.r-progress { flex: 1; text-align: center; font-size: 24rpx; opacity: .65; }
+.r-dis { opacity: .3; }
+
+/* 遮罩 + 面板 / 目录 */
+.r-mask {
+  position: fixed; left: 0; top: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,.4); display: flex; z-index: 50;
+}
+.r-panel {
+  margin: auto; width: 560rpx; background: #fff; color: #222;
+  border-radius: 20rpx; padding: 36rpx; box-sizing: border-box;
+}
+.r-row { display: flex; align-items: center; margin-bottom: 32rpx; }
+.r-label { width: 90rpx; font-size: 28rpx; }
+.r-themes { flex: 1; display: flex; gap: 16rpx; }
+.r-theme { flex: 1; text-align: center; padding: 16rpx 0; border-radius: 12rpx; font-size: 26rpx; border: 2rpx solid #ddd; }
+.r-theme.on { border-color: #1d9e75; color: #1d9e75; }
+.t-light { background: #f6f5f1; }
+.t-sepia { background: #f3e9d2; }
+.t-dark  { background: #161616; color: #d6d4ce; }
+.r-font { flex: 1; display: flex; align-items: center; gap: 24rpx; }
+.r-fbtn { width: 72rpx; height: 72rpx; line-height: 72rpx; text-align: center; border: 2rpx solid #ddd; border-radius: 12rpx; font-size: 30rpx; }
+.r-fval { font-size: 28rpx; min-width: 60rpx; text-align: center; }
+.r-hint { font-size: 22rpx; opacity: .5; margin-top: 4rpx; }
+
+.r-toc {
+  margin: auto 0 0 auto; width: 78%; height: 100%; background: #fff; color: #222;
+  display: flex; flex-direction: column;
+}
+.r-toc-head { padding: 28rpx 32rpx; font-size: 32rpx; font-weight: 700; border-bottom: 1rpx solid #eee; }
+.r-toc-body { flex: 1; }
+.r-toc-item { padding: 24rpx 32rpx; font-size: 28rpx; border-bottom: 1rpx solid #f2f2f2; }
+.r-toc-item.l1 { padding-left: 56rpx; opacity: .85; }
+.r-toc-item.l2 { padding-left: 80rpx; opacity: .7; }
+.r-toc-item.l3 { padding-left: 104rpx; opacity: .6; }
+.r-toc-item.on { color: #1d9e75; font-weight: 600; }
+
+/* 空闲 / 加载 / 错误 */
+.r-idle, .r-loading {
+  height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 60rpx; box-sizing: border-box; background: #f6f5f1; color: #333;
+}
+.r-idle-icon { font-size: 120rpx; margin-bottom: 24rpx; }
+.r-idle-title { font-size: 40rpx; font-weight: 700; margin-bottom: 16rpx; }
+.r-idle-sub { font-size: 26rpx; opacity: .6; text-align: center; line-height: 1.6; margin-bottom: 48rpx; }
+.r-pick { background: #1d9e75; color: #fff; border-radius: 999rpx; padding: 0 70rpx; font-size: 30rpx; }
+.r-loading { gap: 24rpx; font-size: 28rpx; }
+.r-spin {
+  width: 64rpx; height: 64rpx; border: 6rpx solid #ddd; border-top-color: #1d9e75;
+  border-radius: 50%; animation: rspin .8s linear infinite;
+}
+@keyframes rspin { to { transform: rotate(360deg); } }

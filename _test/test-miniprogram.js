@@ -14,6 +14,7 @@ const zh = require(path.join(MP, 'utils', 'opencc.js'));
 const eu = require(path.join(MP, 'utils', 'epub.js'));
 const cl = require(path.join(MP, 'utils', 'clippings.js'));
 const vc = require(path.join(MP, 'utils', 'vocab.js'));
+const euReader = require(path.join(MP, 'utils', 'reader.js'));
 const { unzipSync, zipSync, strToU8, strFromU8 } = require(path.join(MP, 'vendor', 'fflate.js'));
 
 let pass = 0;
@@ -116,6 +117,60 @@ chk(v.words[1].lang === 'en', '英文词标记');
 const anki = vc.toAnki(v.words);
 chk(anki.indexOf('#columns:正面\t背面\t标签') >= 0, 'Anki 表头正确');
 chk(anki.indexOf('惆怅\t他说,心里有点惆怅\n——《红楼梦》\tkindle 中文') >= 0, 'Anki 行格式正确');
+
+console.log('\n=== F. EPUB 阅读器内核（本地解析，不依赖外部文件）===');
+{
+  // 现造一个最小但合法的 EPUB，验证 parseEpub 能抽章节/目录/图片/封面
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+  const files = {
+    'mimetype': strToU8('application/epub+zip'),
+    'META-INF/container.xml': strToU8(
+      '<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0">' +
+      '<rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'),
+    'OEBPS/content.opf': strToU8(
+      '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0">' +
+      '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">' +
+      '<dc:title>测试书</dc:title><dc:creator>张三</dc:creator><dc:language>zh</dc:language>' +
+      '<meta name="cover" content="coverimg"/></metadata>' +
+      '<manifest>' +
+      '<item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>' +
+      '<item id="ch2" href="ch2.xhtml" media-type="application/xhtml+xml"/>' +
+      '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>' +
+      '<item id="coverimg" href="cover.png" media-type="image/png"/>' +
+      '</manifest>' +
+      '<spine toc="ncx"><itemref idref="ch1"/><itemref idref="ch2"/></spine></package>'),
+    'OEBPS/ch1.xhtml': strToU8(
+      '<!DOCTYPE html><html><head><title>第一章</title></head><body>' +
+      '<h1>第一章 开始</h1><p>这是第一段文字，用来测试抽取。</p>' +
+      '<p>这是第二段，含 <b>加粗</b> 与 <i>斜体</i>。</p><img src="cover.png" alt="图"/></body></html>'),
+    'OEBPS/ch2.xhtml': strToU8(
+      '<!DOCTYPE html><html><head><title>第二章</title></head><body>' +
+      '<h1>第二章 继续</h1><p>第二段正文内容。</p></body></html>'),
+    'OEBPS/toc.ncx': strToU8(
+      '<?xml version="1.0"?><ncx version="2005-1"><navMap>' +
+      '<navPoint id="n1"><navLabel><text>第一章</text></navLabel><content src="ch1.xhtml"/></navPoint>' +
+      '<navPoint id="n2"><navLabel><text>第二章</text></navLabel><content src="ch2.xhtml"/></navPoint>' +
+      '</navMap></ncx>'),
+    'OEBPS/cover.png': new Uint8Array(PNG),
+  };
+  const epub = zipSync(files, { level: 0 });
+  const book = euReader.parseEpub(epub);
+  chk(!book.error, '解析成功（无 error）：' + (book.error || ''));
+  chk(book.title === '测试书', '书名解析：' + book.title);
+  chk(book.author === '张三', '作者解析：' + book.author);
+  chk(book.chapters.length === 2, '章节数=2，实际 ' + book.chapters.length);
+  const ch0 = book.chapters[0];
+  chk(ch0.title.indexOf('第一章') >= 0, '首章标题来自 TOC：' + ch0.title);
+  const p0 = ch0.blocks.filter((b) => b.type === 'p').map((b) => b.text).join('');
+  chk(p0.indexOf('这是第一段文字') >= 0, '首章正文被抽出');
+  const img0 = ch0.blocks.find((b) => b.type === 'img');
+  chk(!!img0 && img0.ext === 'png' && img0.bytes && img0.bytes.length === PNG.length,
+    '章节内图片被解析为 png 字节块');
+  chk(book.chapters[1].blocks.map((b) => b.text).join('').indexOf('第二段正文内容') >= 0, '第二章正文被抽出');
+  chk(book.toc.length === 2, '目录项=2，实际 ' + book.toc.length);
+  chk(book.toc[0].chapter === 0 && book.toc[1].chapter === 1, '目录正确映射到章节下标');
+  chk(!!book.cover && book.cover.ext === 'png' && book.cover.bytes.length === PNG.length, '封面图被解析');
+}
 
 console.log('\n==============================================');
 console.log('通过 ' + pass + ' 项，失败 ' + fail + ' 项');

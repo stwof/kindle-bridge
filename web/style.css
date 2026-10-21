@@ -402,6 +402,22 @@ body.rd-open { overflow: hidden; }
 #rd-pct { min-width: 42px; text-align: right; }
 .rd-slider { flex: 1; accent-color: var(--accent); }
 
+/* 沉浸阅读：中点一下隐藏/显示顶底栏 */
+.reader.rd-hide-ui .rd-top,
+.reader.rd-hide-ui .rd-bottom {
+  opacity: 0; pointer-events: none;
+}
+.rd-top, .rd-bottom { transition: opacity .25s ease; }
+
+/* 首次进阅读器的手势提示，几秒后淡出 */
+.rd-gesture-hint {
+  position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%);
+  z-index: 28; padding: 8px 16px; border-radius: 999px;
+  background: rgba(0, 0, 0, .72); color: #fff; font-size: 13px;
+  pointer-events: none; opacity: 0; transition: opacity .4s ease;
+}
+.rd-gesture-hint.show { opacity: 1; }
+
 .rd-selbar {
   position: fixed; right: 18px; top: 74px; z-index: 30;
   display: flex; gap: 6px; padding: 6px; border-radius: 10px;
