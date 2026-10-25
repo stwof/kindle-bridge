@@ -20,6 +20,8 @@ import os
 import re
 import struct
 
+from . import paths as _paths
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 _QUICK_PATH = os.path.join(HERE, "data", "quickdict.json")
 
@@ -36,8 +38,12 @@ def _load_quick() -> dict:
 
 
 def _scan_stardict() -> dict:
-    """找仓库根目录下「字典/」里的 StarDict 三件套（.ifo/.idx/.dict）。"""
-    root = os.path.dirname(HERE)
+    """找数据目录下「字典/」里的 StarDict 三件套（.ifo/.idx/.dict）。
+
+    源码运行时根目录即仓库根；冻结成 exe 后走 paths.data_dir()（exe 所在目录），
+    与 dictbuild.py 的产出位置保持一致。
+    """
+    root = _paths.data_dir()
     droot = os.path.join(root, "字典")
     out: dict = {}
     if not os.path.isdir(droot):

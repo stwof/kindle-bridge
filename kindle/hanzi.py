@@ -90,6 +90,12 @@ _SUPP_S2T_TABLE = {ord(k): v for k, v in _SUPP_S2T.items()}
 #     转换后再还原成预先指定的正确写法。
 _T2S_KEEP: dict[str, str] = {
     "變徵": "变徵",
+    # 乾坤 的「乾」(qián) 不是「干」；五声音阶「宫商角徵羽」的「徵」(zhǐ)
+    # 不是「征」。OpenCC 的短语表本身会保留它们；这里让自制表兜底路径
+    # 也遵守同样的语义（见 to_simplified 的兜底分支）。
+    "乾坤": "乾坤",
+    "宫商角徵羽": "宫商角徵羽",
+    "變徵之聲": "变徵之声",
 }
 _SENT_A = "\ue000"
 _SENT_B = "\ue001"
@@ -254,7 +260,11 @@ def to_simplified(text: str) -> str:
         except Exception:
             pass
     _load()
-    return _convert(text, _T2S)
+    # 兜底表同样要走「语义保留」和「冷僻/异体补丁」：
+    # 否则 乾坤→干坤、宫商角徵羽→宫商角征羽、薴→苧（链式断在苎）都会错。
+    guarded, store = _protect(text, _T2S_KEEP)
+    out = _convert(guarded, _T2S).translate(_SUPP_T2S_TABLE)
+    return _restore(out, store)
 
 
 def to_traditional(text: str) -> str:

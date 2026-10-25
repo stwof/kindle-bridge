@@ -148,8 +148,10 @@ setTimeout(async () => {  console.log('\n=== 页面状态检查 ===');
   }
   const fstate = document.querySelector('#free-state').textContent;
   const grid = document.querySelector('#free-gridbox');
-  const cards2 = (grid.children[0] && grid.children[0].className === 'bk-grid')
-    ? grid.children[0].children.length : 0;
+  // 部分书源失败时 #free-gridbox 第一个子节点是提示 <p>（env-note），
+  // 书卡网格在它后面 —— 按 className 找，不能想当然取 children[0]。
+  const bk = (grid.children || []).find((c) => c && c.className === 'bk-grid');
+  const cards2 = bk ? bk.children.length : 0;
   console.log('  状态:', fstate);
   console.log('  结果卡片数:', cards2);
   if (/检索失败/.test(fstate)) errors.push('公版书库检索失败：' + fstate);

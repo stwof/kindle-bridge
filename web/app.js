@@ -547,6 +547,33 @@
   }
 
   // 简繁转换：上传 → 转换 → 直接下载；可选同时落「收书」
+  async function zhLoad() {
+    // 让状态徽标反映真实转换内核：装了 OpenCC 显示就绪，
+    // 只走自制降级表时要明说（冷僻字覆盖差、乾坤/徵羽等语义词有差异）
+    const st = $('#zh-state');
+    if (!st) return;
+    try {
+      const s = await (await api('/api/status')).json();
+      const z = s && s.zhconv;
+      if (!z || !z.available) {
+        st.textContent = '不可用';
+        st.style.color = 'var(--red)';
+        return;
+      }
+      if (z.backend === 'opencc') {
+        st.textContent = 'OpenCC 就绪';
+        st.style.color = '';
+        st.style.fontWeight = '';
+      } else {
+        st.textContent = '降级表（建议安装 OpenCC）';
+        st.style.color = 'var(--red)';
+        st.style.fontWeight = '500';
+      }
+    } catch (e) {
+      st.textContent = '检测失败';
+    }
+  }
+
   async function zhConvert(files) {
     const dir = $('#zh-dir').value;
     const inbox = $('#zh-inbox').checked ? '1' : '0';
@@ -1073,7 +1100,7 @@
     } else if (item.downloads) {
       tags.appendChild(el('span', 'badge plain', `下载 ${item.downloads.toLocaleString()}`));
     }
-    if (!item.files.length) {
+    if (!item.files || !item.files.length) {
       tags.appendChild(el('span', 'badge warn', '只有网页版'));
     }
     meta.appendChild(tags);
@@ -1081,7 +1108,7 @@
     card.appendChild(top);
 
     const files = el('div', 'bk-files');
-    for (const f of item.files) {
+    for (const f of (item.files || [])) {
       const row = el('div', 'bk-file');
       const btn = el('button', f.native ? 'primary' : 'ghost');
       btn.textContent = `取回 · ${f.label}`;
@@ -2371,6 +2398,7 @@ const readerSpeech = (() => {
       if (!$('#epub-routes').children.length) renderEpubRoutes();
       epubLoad();
       calibreLoad(false);
+      zhLoad();
     } catch (e) {
       $('#devtext').textContent = '读取失败：' + e.message;
     }

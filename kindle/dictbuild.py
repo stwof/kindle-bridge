@@ -208,7 +208,7 @@ def main():
     ap = argparse.ArgumentParser(description="生成 CC-CEDICT 简繁 StarDict 字典")
     ap.add_argument("--source", help="本地已有的 cedict 文本路径（跳过下载）")
     ap.add_argument("--out", default=OUT_DEFAULT, help="输出目录（默认 Kindle桥/字典）")
-    ap.add_argument("--cache", default=os.path.join(BASE_DIR, "data", "cedict_cache"),
+    ap.add_argument("--cache", default=os.path.join(_DATA_ROOT, "data", "cedict_cache"),
                     help="下载缓存目录")
     ap.add_argument("--sample", action="store_true",
                     help="用内置极小样本验证格式（不下载、不联网）")

@@ -346,6 +346,7 @@ def scan_shelf() -> list[dict]:
             "kind": kind,
             "source": source,
             "size": st.st_size,
+            "mtime": st.st_mtime,
             "modified": _fmt_time(st.st_mtime),
             "drm": m["drm"],
             "needs_convert": kind != "epub",
