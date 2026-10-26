@@ -1998,6 +1998,18 @@
       const last = (meta.last && meta.last.cfi) ? meta.last.cfi : null;
       await rendition.display(last || undefined);
       RD.ready = true;
+      // 兜底：display 完成后再把主题底色贴到刚渲染出来的正文视图上，
+      // 根除「首次打开时底色偶发不生效」的竞态（themes.select 早于内容渲染完成）。
+      // 这里同样用 !important 强制钉底色，防书自带 CSS 覆盖。
+      try {
+        const tp = (_rdPrefs().theme || 'light');
+        const ct = _rdThemeCss(_rdPrefs())[tp] || _rdThemeCss(_rdPrefs()).light;
+        RD.rendition.themes.select(tp);
+        if (ct && ct.body) {
+          RD.rendition.themes.override('background-color', ct.body.background, true);
+          RD.rendition.themes.override('color', ct.body.color, true);
+        }
+      } catch (e) { /* ignore */ }
       $('#rd-loading').classList.remove('show');
 
       // 首次进阅读器，提示手势翻页（每个会话只提示一次）
@@ -2197,14 +2209,36 @@ const readerSpeech = (() => {
     const prefs = _rdPrefs();
     if (!RD.rendition) return;
     const css = _rdThemeCss(prefs);
+    const themeName = prefs.theme || 'light';
     try {
       RD.rendition.themes.register('light', css.light);
       RD.rendition.themes.register('sepia', css.sepia);
       RD.rendition.themes.register('dark', css.dark);
       RD.rendition.themes.register('kb', css.light);
       RD.rendition.themes.fontSize((prefs.fontSize || 100) + '%');
-      RD.rendition.themes.select(prefs.theme || 'light');
+      RD.rendition.themes.select(themeName);
+      // 用 !important 把底色与文字色钉在 iframe 的 body 上：epub.js 的 themes.select
+      // 注入的 body 规则没有 !important，常被书自带样式表的 background/color 覆盖，
+      // 这正是「切深色主题时正文底色仍是白底、颜色不变」的根因。override 走 inline
+      // !important，任何书 CSS 都压不过。
+      const t = css[themeName] || css.light;
+      if (t && t.body) {
+        RD.rendition.themes.override('background-color', t.body.background, true);
+        RD.rendition.themes.override('color', t.body.color, true);
+      }
     } catch (e) { /* 主题是锦上添花，出错不拦着读书 */ }
+
+    // 阅读器框架（覆盖层 / 舞台 / 顶底栏）的底色与文字色跟随主题，
+    // 避免「书页变色、周边还是 app 浅色」——这正是底色「偶发不生效」的主因。
+    // 与 epub.js 写进 iframe body 的是同一套色（都出自 _rdThemeCss），保证内外一致。
+    try {
+      const ov = document.getElementById('reader-overlay');
+      const t = css[prefs.theme] || css.light;
+      if (ov && t && t.body) {
+        ov.style.setProperty('--rd-bg', t.body.background);
+        ov.style.setProperty('--rd-fg', t.body.color);
+      }
+    } catch (e) { /* 框架底色是锦上添花 */ }
 
     const stage = $('#rd-stage');
     stage.style.maxWidth = prefs.width ? (prefs.width + 'px') : '';
