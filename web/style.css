@@ -362,18 +362,18 @@ td.num, th.num { text-align: right; white-space: nowrap; }
 
 /* 全屏阅读器 */
 .reader {
-  position: fixed; inset: 0; z-index: 200; background: var(--rd-bg, var(--surface));
+  position: fixed; inset: 0; z-index: 200; background: var(--surface);
   display: flex; flex-direction: column;
 }
 .reader[hidden] { display: none; }
 body.rd-open { overflow: hidden; }
 .rd-top {
   display: flex; align-items: center; gap: 10px; padding: 8px 12px;
-  border-bottom: 1px solid var(--line-soft); background: var(--rd-bg, var(--surface)); color: var(--rd-fg, var(--text));
+  border-bottom: 1px solid var(--line-soft); background: var(--surface); color: var(--text);
 }
 .rd-title {
   flex: 1; min-width: 0; text-align: center; font-size: 13.5px; font-weight: 500;
-  color: var(--rd-fg, var(--text)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .rd-top-actions { display: flex; gap: 6px; }
 .rd-top button { font-size: 12.5px; white-space: nowrap; }
@@ -399,7 +399,7 @@ body.rd-open { overflow: hidden; }
 @keyframes rd-spin { to { transform: rotate(360deg); } }
 .rd-bottom {
   display: flex; align-items: center; gap: 10px; padding: 8px 12px;
-  border-top: 1px solid var(--line-soft); background: var(--rd-bg, var(--surface)); color: var(--rd-fg, var(--text));
+  border-top: 1px solid var(--line-soft); background: var(--surface); color: var(--text);
 }
 .rd-bottom button { font-size: 12.5px; white-space: nowrap; }
 #rd-pct { min-width: 42px; text-align: right; }
@@ -494,37 +494,9 @@ body.rd-open { overflow: hidden; }
 }
 .rd-seg button.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 
-/* 阅读器内嵌主题：顶/底栏底色跟随主题（由 JS 写入 --rd-bg / --rd-fg） */
-body.rd-open .rd-top, body.rd-open .rd-bottom { background: var(--rd-bg, var(--surface)); color: var(--rd-fg, var(--text)); }
-
-/* 深色主题下顶/底栏按钮的可见性修复：ghost 按钮原本深字深边，叠在深色栏上几乎消失。
-   改成跟随阅读器前景色（浅） + 清晰亮边 + 轻微底色，与浅色模式保持一致的「描边芯片」风格。 */
-.reader.rd-theme-dark .rd-top button,
-.reader.rd-theme-dark .rd-bottom button {
-  color: var(--rd-fg, #d8d6d0);
-  border-color: rgba(255, 255, 255, .22);
-  background: rgba(255, 255, 255, .06);
-}
-.reader.rd-theme-dark .rd-top button:hover,
-.reader.rd-theme-dark .rd-bottom button:hover {
-  background: rgba(255, 255, 255, .14);
-  border-color: rgba(255, 255, 255, .36);
-}
-.reader.rd-theme-dark .rd-top button:active,
-.reader.rd-theme-dark .rd-bottom button:active {
-  background: rgba(255, 255, 255, .2);
-}
-.reader.rd-theme-dark .rd-top button:disabled,
-.reader.rd-theme-dark .rd-bottom button:disabled {
-  opacity: .4;
-}
-/* 浅色 / 护眼模式下保持原样（app 级浅底深字已足够对比），仅明确沿用主题前景色 */
-.reader.rd-theme-light .rd-top button,
-.reader.rd-theme-light .rd-bottom button,
-.reader.rd-theme-sepia .rd-top button,
-.reader.rd-theme-sepia .rd-bottom button {
-  color: var(--rd-fg, var(--text));
-}
+/* 阅读器主题仅作用于「文字内容区域」（.rd-stage 舞台 + .rd-loading 加载层），
+   由 JS 写入 #reader-overlay 的 --rd-bg / --rd-fg 驱动；顶/底栏（含按钮）保持
+   app 原生外观（--surface 浅底 + ghost 按钮），不被主题染色，确保按钮区域观感稳定。 */
 
 .tts-opts { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 4px 0 10px; }
 .tts-opts select {

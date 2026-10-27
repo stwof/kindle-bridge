@@ -2228,11 +2228,11 @@ const readerSpeech = (() => {
       }
     } catch (e) { /* 主题是锦上添花，出错不拦着读书 */ }
 
-    // 阅读器框架（覆盖层 / 舞台 / 顶底栏）的底色与文字色跟随主题，
-    // 避免「书页变色、周边还是 app 浅色」——这正是底色「偶发不生效」的主因。
-    // 与 epub.js 写进 iframe body 的是同一套色（都出自 _rdThemeCss），保证内外一致。
-    // 同时给根元素打上主题类（rd-theme-*），让 CSS 能按主题调整顶/底栏按钮配色
-    // （深色模式下把 ghost 按钮从「深字深边」换成「浅字亮边」，否则在深色栏上不可辨）。
+    // 阅读器「文字内容区域」（舞台 .rd-stage 与加载层 .rd-loading）的底色与文字色跟随主题，
+    // 由下面写入 #reader-overlay 的 --rd-bg / --rd-fg 驱动，与 epub.js 写进 iframe body 的
+    // 是同一套色（都出自 _rdThemeCss），保证书页内外一致。顶/底栏（含按钮）刻意不染色，
+    // 保持 app 原生浅底 + ghost 按钮，避免主题把工具栏一起染暗导致按钮不可辨。
+    // 主题类（rd-theme-*）仍打到根元素，供内容区/加载层等按主题微调。
     try {
       const ov = document.getElementById('reader-overlay');
       const t = css[prefs.theme] || css.light;
