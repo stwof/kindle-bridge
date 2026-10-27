@@ -190,6 +190,36 @@ def list_voices() -> list[dict]:
 # ---------------------------------------------------------------------------
 _MODEL_CACHE: dict[str, object] = {}
 
+# ---------------------------------------------------------------------------
+# torch.load 兼容性补丁
+# ---------------------------------------------------------------------------
+# TTS 0.22 的检查点（含优化器状态）引用了 TTS 自定义类（如 RAdam）。
+# PyTorch 2.6+ 把 torch.load 的默认 weights_only 改成 True，会拒绝反序列化这些类，
+# 表现为「Weights only load failed ... GLOBAL TTS.utils.radam.RAdam was not an
+# allowed global」。本地模型是官方可信、已缓存到本机的检查点，离线使用，这里在
+# 加载模型前一次性把 torch.load 强制为 weights_only=False 以兼容 TTS 0.22。
+_TORCH_PATCHED = False
+
+
+def _patch_torch_for_tts() -> None:
+    global _TORCH_PATCHED
+    if _TORCH_PATCHED:
+        return
+    try:
+        import torch
+
+        _orig = torch.load
+
+        def _load(f, *args, **kwargs):
+            kwargs["weights_only"] = False
+            return _orig(f, *args, **kwargs)
+
+        torch.load = _load
+        _TORCH_PATCHED = True
+    except Exception:
+        # 装了不兼容版本时静默失败，让后续真实报错暴露出来
+        pass
+
 
 def _get_model(model_name: str):
     if model_name in _MODEL_CACHE:
@@ -198,6 +228,7 @@ def _get_model(model_name: str):
         from TTS.api import TTS
     except Exception as ex:  # pragma: no cover - 没装时由 available() 挡在前面
         raise TTSSError("未安装 Coqui TTS，请先 pip install -r requirements-tts.txt 后重启服务") from ex
+    _patch_torch_for_tts()  # 必须在构造 TTS() 加载检查点之前打补丁
     try:
         tts = TTS(model_name=model_name, progress_bar=False, gpu=False)
     except Exception as ex:
