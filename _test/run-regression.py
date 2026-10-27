@@ -132,6 +132,7 @@ PY_TESTS = [
     ("本地经典", ["test-classics.py"]),
     ("投递完整性", ["test-deliver-integrity.py"]),
     ("公版书库(联网)", ["test-freebooks.py"]),
+    ("公版书库(解析)", ["test-freebooks-extra.py"]),
 ]
 NODE_TESTS = [
     ("微信小程序", ["test-miniprogram.js"]),

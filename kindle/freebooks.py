@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
-"""公版书库 —— 从古登堡 / 标准电子书取回无 DRM 的公版书，直接投进 Kindle。
+"""公版书库 —— 从古登堡 / 标准电子书 / Open Library / 维基文库取回无 DRM 的公版书，直接投进 Kindle。
 
-两个源的内容都属公有领域，合法、免费、无 DRM，且都提供 Kindle 原生格式：
+四个源的内容都属公有领域（或开放的 CC / 公版全文），合法、免费、无 DRM：
 
   · 古登堡计划 Project Gutenberg  7.5 万+ 册，含 444 册中文（紅樓夢、西遊記…）
       走 Gutendex 的 JSON 接口，不需要注册、不需要密钥。
   · 标准电子书 Standard Ebooks    志愿者精校版，排版明显好于古登堡
+  · Open Library                  元数据 / 封面极佳，带 Internet Archive 全文扫描
+  · 维基文库 Wikisource           志愿者逐字校对的公版全文，官方工具导出 EPUB
 
 下面这些结论都是逐字节实测出来的，不是照抄文档：
 
@@ -48,6 +50,24 @@ GUTENDEX = "https://gutendex.com/books/"
 SE_LIST = "https://standardebooks.org/ebooks"
 SE_BASE = "https://standardebooks.org"
 
+# Open Library：元数据与封面极佳的公有领域书目，且大多带 Internet Archive 全文扫描。
+OL_SEARCH = "https://openlibrary.org/search.json"
+# 维基文库：志愿者逐字校对的公有领域全文，可直接导出 EPUB。
+WS_API = "https://{sub}.wikisource.org/w/api.php"
+WS_EXPORT = "https://ws-export.wmcloud.org/"
+
+# Open Library 用 MARC 3 字母语言码过滤；只映射界面给出的两种。
+_OL_LANG = {"en": "eng", "zh": "chi"}
+# 把 MARC 码翻回两字母显示用（覆盖常见项；其余原样保留）
+_OL_LANG_SHOW = {
+    "eng": "en", "chi": "zh", "fre": "fr", "ger": "de", "spa": "es", "ita": "it",
+    "rus": "ru", "por": "pt", "jpn": "ja", "kor": "ko", "dut": "nl", "swe": "sv",
+    "dan": "da", "fin": "fi", "pol": "pl", "nor": "no", "hun": "hu", "cze": "cs",
+    "gre": "el", "tur": "tr", "ara": "ar", "heb": "he", "hin": "hi", "vie": "vi",
+}
+# 维基文库按语言分站；界面只用到中/英
+_WS_SUB = {"zh": "zh", "en": "en"}
+
 SEGMENTS = 4                      # 分片数：实测 4 路比单连接快 1.6~3 倍
 CHUNK = 64 * 1024
 SEGMENT_MIN = 512 * 1024          # 小于这个体积不值得分片，单流更省事
@@ -56,6 +76,7 @@ SEARCH_TIMEOUT = 20.0            # 这是「多久没收到一点数据就算卡
 SEARCH_DEADLINE = 25.0           # 单次检索最多等这么久；等不到就先用已到的结果
 PROBE_TIMEOUT = 15.0
 READ_TIMEOUT = 30.0
+SEARCH_TIMEOUT_FAST = 10.0    # 新接入源在受限网络下易挂起，给更短超时快速失败，不拖累整体检索
 MAX_BYTES = 150 * 1024 * 1024
 
 _PG_MOBI = "application/x-mobipocket-ebook"
@@ -65,6 +86,8 @@ SOURCES = [
     {"id": "all", "name": "全部"},
     {"id": "gutenberg", "name": "古登堡计划"},
     {"id": "se", "name": "标准电子书"},
+    {"id": "openlibrary", "name": "Open Library"},
+    {"id": "wikisource", "name": "维基文库"},
     {"id": "classics", "name": "中文经典"},
 ]
 
@@ -144,6 +167,9 @@ def _get(url: str, timeout: float = READ_TIMEOUT, tries: int = 3) -> bytes:
             last = FreeError(f"连不上源站：{ex.reason}")
         except TimeoutError:
             last = FreeError("源站响应超时（跨境线路较慢，可稍后重试）")
+        except OSError as ex:
+            # gaierror 等连接层错误（如域名解析失败）也归为此类，确保单源检索时能正确上报
+            last = FreeError(f"连不上源站：{ex}")
         if attempt < tries - 1:
             time.sleep(1.5 * (attempt + 1))
     raise last or FreeError("取数失败")
@@ -319,6 +345,143 @@ def _standard_ebooks(q: str, page: int) -> dict:
     return {"items": items, "count": len(items)}
 
 
+def _open_library(q: str, lang: str, page: int) -> dict:
+    """Open Library —— 元数据与封面极佳的公有领域书目（含 Internet Archive 全文扫描）。
+
+    只取 has_fulltext=true 的书，这样每条都带一个 Internet Archive 标识符（ia），
+    能用 archive.org 的真文件做投递。封面走 covers.openlibrary.org 的稳定接口。
+    注意：ia 下的具体文件名（.epub / .txt）按 Internet Archive 的通用命名约定拼接，
+    下载管线会先验文件再落盘，拼错只会优雅报错、不会把错文件送进 Kindle。
+    """
+    if q:
+        qry = q
+    elif lang == "zh":
+        qry = "古典文學"
+    else:
+        qry = "classic literature"
+    params = {
+        "q": qry,
+        "page": str(max(1, page)),
+        "limit": "24",
+        "has_fulltext": "true",
+        "fields": "title,author_name,cover_i,ia,key,edition_count,first_publish_year,language,has_fulltext",
+    }
+    if lang and _OL_LANG.get(lang):
+        params["language"] = _OL_LANG[lang]
+    url = OL_SEARCH + "?" + "&".join(
+        f"{k}={urllib.parse.quote(str(v))}" for k, v in params.items())
+    try:
+        raw = json.loads(_get(url, timeout=SEARCH_TIMEOUT_FAST, tries=2).decode("utf-8"))
+    except (ValueError, UnicodeDecodeError) as ex:
+        raise FreeError("Open Library 返回的 JSON 无法解析") from ex
+
+    items = []
+    for b in raw.get("docs") or []:
+        ia = b.get("ia") or []
+        if isinstance(ia, str):
+            ia = [ia]
+        ia_id = ia[0] if ia else ""
+        title = (b.get("title") or "").strip() or "（无标题）"
+        authors = b.get("author_name") or []
+        if isinstance(authors, str):
+            authors = [authors]
+        author = "、".join(a for a in authors[:3] if a) or "佚名"
+        cover_i = b.get("cover_i")
+        cover = f"https://covers.openlibrary.org/b/id/{cover_i}-M.jpg" if cover_i else ""
+        marc = b.get("language") or []
+        langs = [_OL_LANG_SHOW.get(m, m) for m in marc if m][:3] or ["en"]
+        key = (b.get("key") or "").strip()
+        page_url = f"https://openlibrary.org{key}" if key else ""
+        files = []
+        if ia_id:
+            files.append({
+                "label": "EPUB（经 Internet Archive）", "ext": ".epub", "native": False,
+                "url": f"https://archive.org/download/{ia_id}/{ia_id}.epub",
+                "note": "取 IA 的 EPUB → 需走转换再送 Kindle；若链接失效可改用纯文本",
+            })
+            files.append({
+                "label": "纯文本（经 Internet Archive）", "ext": ".txt", "native": True,
+                "url": f"https://archive.org/download/{ia_id}/{ia_id}.txt",
+                "note": "IA OCR 全文，设备直接读，最稳",
+            })
+        items.append({
+            "id": f"ol:{key}" if key else f"ol:{ia_id}",
+            "source": "openlibrary",
+            "source_name": "Open Library",
+            "title": title,
+            "author": author,
+            "langs": langs,
+            "downloads": b.get("edition_count") or 0,
+            "page_url": page_url,
+            "cover": cover,
+            "files": files,
+            "subjects": [],
+        })
+    return {"items": items, "count": raw.get("numFound") or raw.get("num_found") or 0}
+
+
+def _wikisource(q: str, lang: str, page: int) -> dict:
+    """维基文库 Wikisource —— 志愿者逐字校对的公有领域全文，可直接导出 EPUB。
+
+    检索走 MediaWiki API（srnamespace=0 只取正文命名空间）；EPUB 走 Wikimedia 官方
+    导出工具 ws-export（/?format=epub&page=<标题>），返回结构合法的 EPUB。
+    中文书切到 zh.wikisource.org，其余走 en.wikisource.org。
+    """
+    sub = _WS_SUB.get(lang, "en")
+    limit = 20
+    off = (max(1, page) - 1) * limit
+    if q:
+        srsearch = q
+    elif lang == "zh":
+        srsearch = "古典文學"
+    else:
+        srsearch = "classic literature"
+    params = {
+        "action": "query", "list": "search", "format": "json",
+        "srnamespace": "0", "srlimit": str(limit), "sroffset": str(off),
+        "srinfo": "totalhits", "srsearch": srsearch,
+    }
+    url = WS_API.format(sub=sub) + "?" + "&".join(
+        f"{k}={urllib.parse.quote(str(v))}" for k, v in params.items())
+    try:
+        raw = json.loads(_get(url, timeout=SEARCH_TIMEOUT_FAST, tries=2).decode("utf-8"))
+    except (ValueError, UnicodeDecodeError) as ex:
+        raise FreeError("维基文库返回的 JSON 无法解析") from ex
+
+    qry = raw.get("query") or {}
+    hits = qry.get("search") or []
+    total = (qry.get("searchinfo") or {}).get("totalhits") or 0
+    base = f"https://{sub}.wikisource.org"
+    items = []
+    for b in hits:
+        title = (b.get("title") or "").strip()
+        if not title:
+            continue
+        page_name = title.replace(" ", "_")
+        pageid = b.get("pageid")
+        pid = f"ws:{sub}:{pageid}" if pageid else f"ws:{sub}:{page_name}"
+        items.append({
+            "id": pid,
+            "source": "wikisource",
+            "source_name": "维基文库",
+            "title": title,
+            "author": "",
+            "langs": [sub],
+            "downloads": 0,
+            "page_url": f"{base}/wiki/{urllib.parse.quote(title)}",
+            "cover": "",
+            "files": [
+                {
+                    "label": "EPUB（Wikimedia 官方导出）", "ext": ".epub", "native": False,
+                    "url": f"{WS_EXPORT}?format=epub&page={urllib.parse.quote(page_name)}",
+                    "note": "维基文库公版全文 → 官方工具导出 EPUB，需转换后送 Kindle",
+                },
+            ],
+            "subjects": [],
+        })
+    return {"items": items, "count": total}
+
+
 def search(q: str = "", source: str = "all", lang: str = "", page: int = 1) -> dict:
     """跨源检索。任一源挂了不影响另一个源出结果。"""
     q = (q or "").strip()
@@ -333,11 +496,13 @@ def search(q: str = "", source: str = "all", lang: str = "", page: int = 1) -> d
     errors: list[str] = []
     total = 0
 
-    # 两个源各跑各的线程：总耗时取决于慢的那个，而不是两者相加。
+    # 各源各跑各的线程：总耗时取决于慢的那个，而不是两者相加。
     want_pg = source in ("all", "gutenberg")
     want_se = source in ("all", "se") and (not lang or lang == "en")
     # 中文经典是本地语料，只在中文语境下参与；英文检索时不掺和
     want_cl = source in ("all", "classics") and (not lang or lang == "zh")
+    want_ol = source in ("all", "openlibrary")
+    want_ws = source in ("all", "wikisource")
     results: dict[str, dict] = {}
     boom: dict[str, str] = {}
 
@@ -354,13 +519,23 @@ def search(q: str = "", source: str = "all", lang: str = "", page: int = 1) -> d
     if want_se:
         threads.append(("标准电子书", threading.Thread(
             target=run, args=("标准电子书", lambda: _standard_ebooks(q, page)), daemon=True)))
+    if want_ol:
+        threads.append(("Open Library", threading.Thread(
+            target=run, args=("Open Library", lambda: _open_library(q, lang, page)), daemon=True)))
+    if want_ws:
+        threads.append(("维基文库", threading.Thread(
+            target=run, args=("维基文库", lambda: _wikisource(q, lang, page)), daemon=True)))
     if want_cl:
         threads.append(("中文经典", threading.Thread(
             target=run, args=("中文经典", lambda: _classics(q, page)), daemon=True)))
     for _, t in threads:
         t.start()
+    # 整体预算：所有源共享 SEARCH_DEADLINE，而不是每个源各等这么久。
+    # 顺序 join 会让耗时线性叠加，慢源一多就整体超时；改成「全局倒计时」，
+    # 到点（默认 25s）不论还有几个源没答上来都先收尾，给出已到的结果。
+    deadline = time.time() + SEARCH_DEADLINE
     for _, t in threads:
-        t.join(SEARCH_DEADLINE)
+        t.join(max(0.0, deadline - time.time()))
 
     # 到点了还没答上来的源就放弃 —— 宁可先给一半结果，也不要让页面干等
     for name, t in threads:
