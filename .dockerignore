@@ -1,0 +1,19 @@
+# 排除不需要打进镜像的内容
+.venv/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+node_modules/
+Inbox/
+Export/
+收书/
+导出/
+字典/
+.mypy_cache/
+.pytest_cache/
+*.log
+.DS_Store
+启动 Kindle桥.bat
+_do_install_tts*.sh
+_do_install_tts*.bat

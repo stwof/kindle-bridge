@@ -6,6 +6,9 @@ title Kindle Bridge
 cd /d "%~dp0"
 set "PORT=8765"
 set "HERE=%CD%"
+rem 某些环境 %CD% 末尾不带反斜杠，统一补上，否则后面的 .venv 检测与
+rem requirements.txt 路径会退化成 "kindle-bridge.venv"/"kindle-bridgerequirements.txt"
+if not "%HERE:~-1%"=="\" set "HERE=%HERE%\"
 
 echo.
 echo   ==========================================

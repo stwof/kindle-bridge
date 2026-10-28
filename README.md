@@ -165,6 +165,55 @@ python app.py --port 8765 --host 127.0.0.1 --no-browser
 
 `--port` 端口（默认 8765）、`--host` 绑定地址（默认仅本机）、`--no-browser` 不自动开浏览器。
 
+## 生产部署（Ubuntu / Linux）
+
+代码层已是跨平台设计，无需改动即可在 Linux 上跑。下面两种方式任选其一，让服务**开机自启、后台常驻**。
+
+### 方式 A：systemd 用户服务（裸机 / 家庭服务器首选）
+
+仓库自带 `kindle-bridge.service`（user 级，避免用 root 跑）。先把它放到用户 systemd 目录，并把文件里的路径改成你实际 clone 的目录：
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp kindle-bridge.service ~/.config/systemd/user/
+# 编辑 ~/.config/systemd/user/kindle-bridge.service，把 %h/kindle-bridge 改成真实路径
+systemctl --user daemon-reload
+systemctl --user enable --now kindle-bridge      # 开机自启 + 立即启动
+journalctl --user -u kindle-bridge -f            # 看日志
+```
+
+> 无图形登录的 headless 服务器上，要让用户服务在重启后、未登录时也能跑，需开启 linger：
+> `sudo loginctl enable-linger $USER`。
+
+> **远程 / 公网访问务必加反代**：服务是纯 HTTP、**无任何鉴权**。把 `ExecStart` 里的
+> `127.0.0.1` 改成 `0.0.0.0` 后，务必在前面套一层 Nginx 反代 + 访问控制（Basic Auth 或
+> 内网白名单），**不要裸奔到公网**。
+
+### 方式 B：Docker
+
+仓库自带 `Dockerfile`：
+
+```bash
+docker build -t kindle-bridge .
+docker run -d --name kb -p 8765:8765 \
+  -v "$(pwd)/Inbox:/app/Inbox" -v "$(pwd)/Export:/app/Export" \
+  kindle-bridge
+```
+
+需要 MOBI→EPUB 转换的话，编辑 Dockerfile 取消 `calibre` 那行的注释再重建。
+
+### 部署前注意
+
+- **Python 版本**：Coqui TTS 仅支持 **3.9–3.11**。Ubuntu 22.04 自带 3.10 直接可用；
+  24.04 自带 3.12，需另建 3.11 的 venv（与 Windows 同约束）。
+- **编译依赖**：TTS 的 C 扩展需要 gcc，先 `sudo apt install build-essential python3-dev`
+  （Linux 下不需要 Windows SDK / MSVC，通常一条 `pip install` 即可）。
+- **模型下载**：TTS 模型首次合成从 HuggingFace 拉；服务器若外网受限，设
+  `HF_ENDPOINT=https://hf-mirror.com`（Dockerfile 已默认写入）。
+- **USB 直连 Kindle 自动探测**：`device.py` 只扫 Windows 盘符，Linux 上失效。可用
+  **手动挂载路径**（如 `/media/<用户>/Kindle`）或把书丢进 `收书/` 文件夹替代——所有
+  本地功能（简繁、标注、生词、朗读、EPUB 阅读）完全不受影响。
+
 ### 微信小程序
 
 `miniprogram/` 下有一个**纯端内运行**的微信小程序：`miniprogram/README.md`。

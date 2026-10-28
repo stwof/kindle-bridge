@@ -1,0 +1,19 @@
+[Unit]
+Description=Kindle Bridge — 本地书与笔记管理工具
+Documentation=file:///home/YOURUSER/kindle-bridge/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# ↓↓↓ 把下面两处路径改成你实际 clone 到的目录 ↓↓↓
+WorkingDirectory=%h/kindle-bridge
+ExecStart=%h/kindle-bridge/.venv/bin/python %h/kindle-bridge/app.py --host 127.0.0.1 --port 8765 --no-browser
+# 如需局域网/公网访问，把上面 127.0.0.1 改成 0.0.0.0；
+# 服务本身【无任何鉴权】，公网暴露务必套一层 Nginx 反代 + 访问控制（Basic Auth / 内网穿透白名单）。
+Restart=on-failure
+RestartSec=3
+# 查看日志： journalctl --user -u kindle-bridge -f
+
+[Install]
+WantedBy=default.target
