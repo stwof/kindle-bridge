@@ -120,78 +120,96 @@ EPUB 转换**只动文本节点**，标签、样式、脚本、图片、字体�
 > ```
 > 重启 Kindle 桥即可。「朗读」页在没装 TTS 时会明确提示怎么装，不影响其它功能。
 
-## 快速开始
+## 一、代码下载
 
-### 下载现成的（推荐）
+获取项目源码，并确认本机满足前置依赖。
 
-去 [Releases](https://github.com/stwof/kindle-bridge/releases) 拿打包好的版本：
+### 1.1 下载打包版（推荐，免配环境）
 
-| 产物 | 说明 |
-|---|---|
-| `Kindle-Bridge-1.0.0.exe` | **Windows 单文件版**，双击即用，不需要装 Python（9.8 MB） |
-| `kindle-bridge-1.0.0.zip` | 源码包，解压后用启动器运行 |
+前往 [Releases](https://github.com/stwof/kindle-bridge/releases) 获取成品：
 
-> 单文件版里只读资源（网页、词表）打进了 exe，**用户数据（`收书/`、`导出/`、`工具/`）
-> 落在 exe 旁边** —— 把 exe 放哪儿，你就在那儿放书、拿结果。
+| 产物 | 适用 | 说明 |
+|---|---|---|
+| `Kindle-Bridge-x.x.x.exe` | Windows | 单文件版，双击即用，无需安装 Python |
+| `kindle-bridge-x.x.x.zip` | 全平台 | 源码包，解压后用启动器运行 |
 
-### 从源码跑
+> 单文件版把只读资源（网页、词表）打进 exe，**用户数据（`收书/`、`导出/`、`工具/`）落在 exe 旁边**——把 exe 放哪，就在哪放书、拿结果。
+
+### 1.2 从源码获取
 
 ```bash
 git clone https://github.com/stwof/kindle-bridge.git
 cd kindle-bridge
-pip install -r requirements.txt
-python app.py            # 浏览器会自动打开 http://127.0.0.1:8765/
 ```
 
-### Windows
+源码无任何构建步骤：前端是纯静态文件、无 `node_modules`、无打包，`git clone` 完即可运行。
 
-1. 双击 **`启动 Kindle桥.bat`**
-   （首次运行会自动装依赖；没装 Python 会提示你去官网下载）
-2. 浏览器自动打开 `http://127.0.0.1:8765/`
-3. 用数据线把 Kindle 连上，**点一下 Kindle 上的「允许 USB 连接」**
+### 1.3 前置依赖
 
-### macOS / Linux
+| 依赖 | 必需性 | 版本 / 说明 |
+|---|---|---|
+| Python | 必需 | 核心功能 **3.8+**；启用「朗读」需 **3.9–3.11**（Coqui TTS 不支持 3.12+） |
+| OpenCC | 必需（自动安装） | 简繁转换内核。首次启动脚本自动 `pip install`；装不上则回落内置小词表 |
+| Calibre | 可选 | 阅读 MOBI/AZW3、把 EPUB 投递成 AZW3 时才需要；工具会引导下载，不静默安装 |
+| Coqui TTS | 可选 | 本地语音合成；装法见第二章各平台说明 |
+| 微信小程序 | 可选 | 手机端另见 `miniprogram/README.md` |
+
+> 阅读器依赖的 epub.js、JSZip 已随仓库以静态资源提供，不参与安装、无构建步骤。
+
+---
+
+## 二、部署步骤
+
+本章只讲**如何把服务在本机或服务器跑起来**。服务启动后，界面与功能操作见第三章「使用步骤」。
+
+### 2.1 Windows 部署
+
+三种方式任选：
+
+- **A. 单文件 exe（最省事）**：双击 `Kindle-Bridge-x.x.x.exe`，浏览器自动打开。
+- **B. 启动器（源码用户推荐）**：
+  1. 双击 **`启动 Kindle桥.bat`**；
+  2. 首次运行自动安装依赖（OpenCC）；未装 Python 会提示去官网下载；
+  3. 浏览器自动打开 `http://127.0.0.1:8765/`。
+- **C. 命令行**：
+  ```bash
+  python app.py
+  ```
+
+> 启动器会自动选用项目内的 `.venv`（若已存在）；若用 3.11 的 venv 装了 TTS，朗读功能即生效。
+
+### 2.2 macOS / Linux 本地部署
 
 ```bash
 chmod +x start.sh
-./start.sh            # 指定端口： ./start.sh 9000
+./start.sh                 # 默认 8765 端口
+./start.sh 9000           # 指定端口（位置参数）
+./start.sh --host 0.0.0.0 # 允许局域网访问
 ```
 
-### 命令行参数
+启动器会依次：选用 `.venv/bin/python` 或系统 `python3` → 缺依赖时自动装 OpenCC → 启动服务。
+**无图形界面（headless）或 SSH 会话下自动加 `--no-browser`**，避免无谓报错。
 
-```
-python app.py --port 8765 --host 127.0.0.1 --no-browser
-```
+### 2.3 Linux 生产部署（开机自启、后台常驻）
 
-`--port` 端口（默认 8765）、`--host` 绑定地址（默认仅本机）、`--no-browser` 不自动开浏览器。
+代码层已跨平台，无需改动即可在 Linux 运行。以下任选其一让服务常驻：
 
-## 生产部署（Ubuntu / Linux）
+**方式 A：systemd 用户服务**（裸机 / 家庭服务器首选）
 
-代码层已是跨平台设计，无需改动即可在 Linux 上跑。下面两种方式任选其一，让服务**开机自启、后台常驻**。
-
-### 方式 A：systemd 用户服务（裸机 / 家庭服务器首选）
-
-仓库自带 `kindle-bridge.service`（user 级，避免用 root 跑）。先把它放到用户 systemd 目录，并把文件里的路径改成你实际 clone 的目录：
+仓库自带 `kindle-bridge.service`（user 级，避免用 root 跑）。把它放到用户 systemd 目录并改好路径：
 
 ```bash
 mkdir -p ~/.config/systemd/user
 cp kindle-bridge.service ~/.config/systemd/user/
-# 编辑 ~/.config/systemd/user/kindle-bridge.service，把 %h/kindle-bridge 改成真实路径
+# 编辑该文件，把 %h/kindle-bridge 改成你实际 clone 的目录
 systemctl --user daemon-reload
-systemctl --user enable --now kindle-bridge      # 开机自启 + 立即启动
-journalctl --user -u kindle-bridge -f            # 看日志
+systemctl --user enable --now kindle-bridge   # 开机自启 + 立即启动
+journalctl --user -u kindle-bridge -f         # 查看日志
 ```
 
-> 无图形登录的 headless 服务器上，要让用户服务在重启后、未登录时也能跑，需开启 linger：
-> `sudo loginctl enable-linger $USER`。
+> headless 服务器上要让服务在重启后、未登录时也能跑，需开启 linger：`sudo loginctl enable-linger $USER`。
 
-> **远程 / 公网访问务必加反代**：服务是纯 HTTP、**无任何鉴权**。把 `ExecStart` 里的
-> `127.0.0.1` 改成 `0.0.0.0` 后，务必在前面套一层 Nginx 反代 + 访问控制（Basic Auth 或
-> 内网白名单），**不要裸奔到公网**。
-
-### 方式 B：Docker
-
-仓库自带 `Dockerfile`：
+**方式 B：Docker**
 
 ```bash
 docker build -t kindle-bridge .
@@ -200,19 +218,86 @@ docker run -d --name kb -p 8765:8765 \
   kindle-bridge
 ```
 
-需要 MOBI→EPUB 转换的话，编辑 Dockerfile 取消 `calibre` 那行的注释再重建。
+需要 MOBI→EPUB 转换时，编辑 Dockerfile 取消 `calibre` 注释再重建。
 
-### 部署前注意
+> ⚠️ **远程 / 公网访问务必加反代**：服务是纯 HTTP、**无任何鉴权**。把 `ExecStart` 里的 `127.0.0.1` 改成 `0.0.0.0`（或 Docker 默认已监听全网卡）后，必须在前面套一层 Nginx 反代 + 访问控制（Basic Auth 或内网白名单），**切勿裸奔到公网**。
 
-- **Python 版本**：Coqui TTS 仅支持 **3.9–3.11**。Ubuntu 22.04 自带 3.10 直接可用；
-  24.04 自带 3.12，需另建 3.11 的 venv（与 Windows 同约束）。
-- **编译依赖**：TTS 的 C 扩展需要 gcc，先 `sudo apt install build-essential python3-dev`
-  （Linux 下不需要 Windows SDK / MSVC，通常一条 `pip install` 即可）。
-- **模型下载**：TTS 模型首次合成从 HuggingFace 拉；服务器若外网受限，设
-  `HF_ENDPOINT=https://hf-mirror.com`（Dockerfile 已默认写入）。
-- **USB 直连 Kindle 自动探测**：`device.py` 只扫 Windows 盘符，Linux 上失效。可用
-  **手动挂载路径**（如 `/media/<用户>/Kindle`）或把书丢进 `收书/` 文件夹替代——所有
-  本地功能（简繁、标注、生词、朗读、EPUB 阅读）完全不受影响。
+**部署前注意**
+
+- **Python 版本**：Coqui TTS 仅支持 **3.9–3.11**。Ubuntu 22.04 自带 3.10 直接可用；24.04 自带 3.12，需另建 3.11 venv。
+- **编译依赖**：TTS 的 C 扩展需要 gcc，先 `sudo apt install build-essential python3-dev`（Linux 下无需 Windows SDK / MSVC，通常一条 `pip install` 即可）。
+- **模型下载**：TTS 模型首次合成从 HuggingFace 拉取；外网受限时设 `HF_ENDPOINT=https://hf-mirror.com`（Dockerfile 已默认写入）。
+- **USB 直连探测**：`device.py` 只扫 Windows 盘符，Linux 上失效。可用**手动挂载路径**（如 `/media/<用户>/Kindle`）或把书丢进 `收书/` 文件夹替代——所有本地功能（简繁、标注、生词、朗读、EPUB 阅读）完全不受影响。
+
+### 2.4 命令行参数
+
+无论哪种部署方式，最终都通过 `app.py` 启动，可用以下参数微调：
+
+```
+python app.py --port 8765 --host 127.0.0.1 --no-browser
+```
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `--port` | `8765` | 监听端口 |
+| `--host` | `127.0.0.1` | 绑定地址；改 `0.0.0.0` 可允许局域网/远程（需配反代） |
+| `--no-browser` | 关 | 不自动打开浏览器（服务器 / headless 必加） |
+
+---
+
+## 三、使用步骤
+
+服务启动、浏览器打开 `http://127.0.0.1:8765/`（或你指定的地址）后，即可使用。以下为日常操作指引。
+
+### 3.1 连接 Kindle（可选）
+
+用数据线把 Kindle 连上电脑，并在 Kindle 屏幕上点「**允许 USB 连接**」。
+
+> 设备自动识别依赖 Windows；macOS / Linux 下此功能受限。此时可改用**手动挂载路径**或把书直接放进 `收书/` 文件夹——简繁转换、标注/生词解析、阅读器、朗读等纯本地功能均不受影响。
+
+### 3.2 各功能怎么用
+
+**简繁转换**
+- 在「简繁转换」页上传 EPUB / TXT，选择方向（繁→简 `t2s`，或简→繁台湾正体 `s2twp`），点转换后下载结果。
+- TXT 自动嗅探编码（UTF-8 / GB18030 / Big5）；EPUB 只动文本节点，标签/样式/图片原样保留。
+
+**标注 / 生词**
+- 连上 Kindle 后，进入「标注」页解析 `My Clippings.txt`、进入「生词」页解析 `vocab.db`，导出为 Markdown / CSV / Anki 词库。
+
+**书籍投递**
+- 想把 EPUB 送进 Kindle：用「书籍投递」页，推荐**路线 A（本地转 AZW3 再拷贝）**——离线、不碰账号。需要本机装有 Calibre。
+- 其它路线（Send to Kindle、KOReader、直接拷 MOBI 家族）见界面内说明。
+
+**本地阅读器**
+- 「阅读器」页自动收拢 `收书/`、`导出/` 与连着设备里的书，点开即读。
+- 翻页：键盘 `←/→` 或空格、鼠标点击（左 1/3 上页、右 1/3 下页、中间隐藏/显示顶底栏）、滚轮、触摸滑动；`Esc` 返回书架、`R` 朗读。
+- 主题（浅/护眼/深）、字号、行距、页宽可调；进度与划线自动记忆。
+
+**朗读（TTS）**
+- 「朗读」页把文字贴进文本框，选声音（中文 Baker / 英文 LJSpeech / 多语 YourTTS），点「生成并播放」，也可下载 WAV。
+- 未装 Coqui TTS 时自动回落浏览器自带语音，界面会标明当前引擎。
+- 阅读器内按 `R` 或点 🔊 可朗读当前页 / 选中段落；勾「自动续读」读完自动翻下一页。
+
+**划词查词**
+- 在阅读器内选中正文词语，浮动工具条点「查词」，弹出释义卡片（中文带拼音、英文给释义），并可 🔊 朗读该词。先查内置小词典，再查 `字典/` 下的 StarDict 字典，全程离线。
+
+**公版书库**
+- 「公版书库」页检索 Gutenberg / Standard Ebooks / Open Library / 维基文库 / 中文经典，取回后落入 `收书/`。
+
+### 3.3 数据与配置目录
+
+| 目录 / 文件 | 用途 |
+|---|---|
+| `收书/` | 放入待投递 / 待转换的电子书，公版书库取回也落这里 |
+| `导出/` | 所有产物（简繁结果、标注、生词、微信读书格式）落地处 |
+| `书架/` | 阅读进度 `进度.json`、划线标注 `标注.json`（普通 JSON，可备份/自改） |
+| `字典/` | 放入 StarDict 字典（`.idx`/`.dict`），网页阅读器与 KOReader 共用 |
+| `工具/缓存/阅读器/` | MOBI/AZW3 转 EPUB 的缓存（转一次秒开） |
+| `~/.local/share/tts`（Linux）/ `AppData\Local\tts`（Windows） | 朗读声音模型缓存，首次使用自动下载 |
+
+**个性化配置**：阅读器主题、字号、翻页偏好等记在浏览器 `localStorage` 与 `书架/` 的两个 JSON 中，无需改代码。
+
+---
 
 ### 微信小程序
 
