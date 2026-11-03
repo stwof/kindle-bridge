@@ -10,4 +10,16 @@
 #
 # 装完重启 Kindle 桥，到「朗读」页即可用；语音模型在首次使用时由 Coqui 自动下载
 # （约 50~120 MB，缓存在本机 ~/.local/share/tts，之后不用再下）。
-TTS>=0.21,<0.23
+#
+# ⚠️ 安装排错：TTS 依赖 aiohttp>=3.8.1。若 pip 报
+#    "no matching distributions available for your environment: aiohttp"
+#    （常见于镜像源缺包或 pip 解析器误判），请**先单独装 aiohttp 再装本文件**：
+#        pip install "aiohttp>=3.8.1"
+#        pip install -r requirements-tts.txt
+#    若 aiohttp 单独也装不上，多半是镜像源缺包，临时切官方源：
+#        pip install --index-url https://pypi.org/simple/ -r requirements-tts.txt
+#
+# 钉死 0.22.0：这是已在 Windows/3.11 与 Linux/3.10 验证可装的版本，且与
+# kindle/tts.py 中针对 PyTorch>=2.6 的 torch.load 补丁匹配。
+TTS==0.22.0
+
