@@ -11,12 +11,13 @@
 # 装完重启 Kindle 桥，到「朗读」页即可用；语音模型在首次使用时由 Coqui 自动下载
 # （约 50~120 MB，缓存在本机 ~/.local/share/tts，之后不用再下）。
 #
-# ⚠️ 安装排错：TTS 依赖 aiohttp>=3.8.1。若 pip 报
-#    "no matching distributions available for your environment: aiohttp"
-#    （常见于镜像源缺包或 pip 解析器误判），请**先单独装 aiohttp 再装本文件**：
-#        pip install "aiohttp>=3.8.1"
+# ⚠️ 安装排错：TTS 依赖 aiohttp>=3.8.1、matplotlib>=3.7.0 等。若 pip 报
+#    "no matching distributions available for your environment: aiohttp / matplotlib"
+#    （常见于镜像源缺包、或镜像只提供需要更新 Python 的包版本，pip 解析器误判），请：
+#    ① 先单独装报缺的包，再装本文件：
+#        pip install "aiohttp>=3.8.1" "matplotlib>=3.7.0,<3.10"
 #        pip install -r requirements-tts.txt
-#    若 aiohttp 单独也装不上，多半是镜像源缺包，临时切官方源：
+#    ② 若仍装不上，多半是镜像源缺包，临时切官方源（最干净）：
 #        pip install --index-url https://pypi.org/simple/ -r requirements-tts.txt
 #
 # 钉死 0.22.0：这是已在 Windows/3.11 与 Linux/3.10 验证可装的版本，且与
