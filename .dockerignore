@@ -7,13 +7,14 @@ __pycache__/
 node_modules/
 Inbox/
 Export/
-收书/
-导出/
-字典/
+inbox/
+export/
+dictionary/
+scripts/
 .mypy_cache/
 .pytest_cache/
 *.log
 .DS_Store
-启动 Kindle桥.bat
+start-kindle-bridge.bat
 _do_install_tts*.sh
 _do_install_tts*.bat

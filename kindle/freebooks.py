@@ -42,8 +42,8 @@ from .convert import find_ebook_convert
 from . import paths as _paths
 
 BASE_DIR = _paths.data_dir()
-INBOX_DIR = os.path.join(BASE_DIR, "收书")
-CACHE_DIR = os.path.join(BASE_DIR, "工具", "缓存")
+INBOX_DIR = os.path.join(BASE_DIR, "inbox")
+CACHE_DIR = os.path.join(BASE_DIR, "tools", "cache")
 
 UA = "KindleBridge/1.2 (personal local tool; non-commercial)"
 GUTENDEX = "https://gutendex.com/books/"
@@ -106,7 +106,7 @@ class FreeError(Exception):
 
 _SEARCH_CACHE: dict[tuple, tuple[float, dict]] = {}
 _SEARCH_LOCK = threading.Lock()
-_DISK_CACHE = os.path.join(CACHE_DIR, "检索缓存.json")
+_DISK_CACHE = os.path.join(CACHE_DIR, "search-cache.json")
 
 
 def _disk_key(q: str, source: str, lang: str, page: int) -> str:
@@ -843,7 +843,7 @@ def _run_job(job: dict) -> None:
             dev = dev_mod.find_kindle()
             steps = deliv_mod.push_native(
                 [dest], dev.documents if dev else "",
-                os.path.join(BASE_DIR, "导出", "Kindle书"))
+                os.path.join(BASE_DIR, "export", "kindle-books"))
             job["pushed"] = [s.to_dict() for s in steps]
 
     except FreeError as ex:

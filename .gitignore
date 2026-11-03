@@ -14,14 +14,16 @@ _release/
 *.spec.bak
 
 # ---- 运行时数据（体积大、且属于用户私有内容，不进版本库）----
-导出/*
-!导出/.gitkeep
-收书/*
-!收书/.gitkeep
-书架/*
-!书架/.gitkeep
-工具/*
-!工具/.gitkeep
+export/*
+!export/.gitkeep
+inbox/*
+!inbox/.gitkeep
+bookshelf/*
+!bookshelf/.gitkeep
+tools/*
+!tools/.gitkeep
+dictionary/*
+!dictionary/.gitkeep
 corpus/
 *.log
 

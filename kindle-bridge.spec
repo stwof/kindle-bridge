@@ -2,13 +2,13 @@
 """PyInstaller 打包配置 —— 打成一个可以直接双击的单文件 exe。
 
     pip install pyinstaller
-    pyinstaller Kindle桥.spec
+    pyinstaller kindle-bridge.spec
 
 产物在 dist/。用户只需要这一个文件，不需要装 Python。
 
 分界（由 kindle/paths.py 统一管）：
   只读资源 web/、kindle/data/  →  打进 exe，运行时解包到临时目录
-  用户数据 收书/、导出/、工具/  →  不打包，运行时落在 exe 旁边
+  用户数据 inbox/、export/、tools/  →  不打包，运行时落在 exe 旁边
 所以把 exe 放哪儿，用户就在那儿放书、拿结果。
 """
 import os
@@ -57,7 +57,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name="Kindle桥",
+    name="kindle-bridge",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

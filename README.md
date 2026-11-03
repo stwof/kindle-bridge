@@ -24,14 +24,14 @@ Kindle 桥在你本机开一个小服务，用数据线连上 Kindle 后，把�
 
 | 模块 | 干什么 | 产物落在哪 |
 |---|---|---|
-| **书库** | 扫描 Kindle 上的书，筛出「微信读书不兼容」的，一键导出 | `导出/微信读书/` |
-| **书籍投递** | EPUB/MOBI/AZW3 投进设备，四条路线任选 | `收书/` → 设备 `documents/` |
-| **简繁转换** | EPUB / TXT 在**简体 ↔ 繁体**之间互转 | 下载或 `导出/简繁转换/` |
-| **阅读器** | 在本机直接读 EPUB / TXT / MOBI / AZW3，带目录、划线标注、进度记忆、**边读边听**、**划词查词**；支持鼠标点击/滚轮/触摸滑动翻页 | `书架/` |
+| **书库** | 扫描 Kindle 上的书，筛出「微信读书不兼容」的，一键导出 | `export/wechat-read/` |
+| **书籍投递** | EPUB/MOBI/AZW3 投进设备，四条路线任选 | `inbox/` → 设备 `documents/` |
+| **简繁转换** | EPUB / TXT 在**简体 ↔ 繁体**之间互转 | 下载或 `export/traditional/` |
+| **阅读器** | 在本机直接读 EPUB / TXT / MOBI / AZW3，带目录、划线标注、进度记忆、**边读边听**、**划词查词**；支持鼠标点击/滚轮/触摸滑动翻页 | `bookshelf/` |
 | **朗读** | 文字转语音（TTS），本地用 Coqui TTS 合成，不联网 | 浏览器内播放 / 下载 WAV |
-| **公版书库** | 检索并取回 Gutenberg / Standard Ebooks / **Open Library** / **维基文库** / 中文经典（均公有领域） | `收书/` |
-| **标注** | 解析 `My Clippings.txt`，导出笔记 | `导出/标注/` |
-| **生词** | 解析 `vocab.db`，导出 CSV / Anki 词库 | `导出/生词/` |
+| **公版书库** | 检索并取回 Gutenberg / Standard Ebooks / **Open Library** / **维基文库** / 中文经典（均公有领域） | `inbox/` |
+| **标注** | 解析 `My Clippings.txt`，导出笔记 | `export/annotations/` |
+| **生词** | 解析 `vocab.db`，导出 CSV / Anki 词库 | `export/vocab/` |
 | **使用说明** | 页面内图文教程 | — |
 
 ### 简繁转换（内置 OpenCC 字典）
@@ -61,7 +61,7 @@ EPUB 转换**只动文本节点**，标签、样式、脚本、图片、字体�
 
 ### 本地阅读器（epub.js + Calibre）
 
-「阅读器」页是一个**跑在本机的网页阅读器**：书架自动收拢 `收书/`、`导出/` 下的书，
+「阅读器」页是一个**跑在本机的网页阅读器**：书架自动收拢 `inbox/`、`export/` 下的书，
 以及连着的 Kindle 里的书，点开就能读。
 
 - **EPUB**：用 [epub.js](https://github.com/futurepress/epub.js)（BSD 类许可）直接在浏览器里渲染，
@@ -69,7 +69,7 @@ EPUB 转换**只动文本节点**，标签、样式、脚本、图片、字体�
 - **TXT**：现场打包成 EPUB（就是「简繁转换」那套 `build_epub`），零外部依赖。
 - **MOBI / AZW3 / AZW / PRC**：Kindle 原生读不了网页格式，交给本机
   [Calibre](https://calibre-ebook.com/) 的 `ebook-convert` 转成 EPUB —— **转一次就缓存**
-  （`工具/缓存/阅读器/`），之后再开同一本书是秒开。没装 Calibre 会明确提示。
+  （`tools/cache/reader/`），之后再开同一本书是秒开。没装 Calibre 会明确提示。
 
 阅读体验：目录、字体/行距/页宽/主题（浅色/护眼/深色）、**键盘 ←→ / 空格翻页**，
 以及更顺手的**鼠标点击翻页**（左 1/3 上一页、右 1/3 下一页、中间点一下隐藏/显示顶底栏）、
@@ -85,8 +85,8 @@ EPUB 转换**只动文本节点**，标签、样式、脚本、图片、字体�
 英文给释义），还能直接 🔊 朗读该词。查询全程**离线、不联网**：
 
 - 先查内置的 `kindle/data/quickdict.json` 精选小词典（中英常用词，开箱即用）；
-- 再用 `kindle/dictbuild.py` 生成的 StarDict 字典（`字典/` 下的 `.idx` / `.dict`），
-  词库更大；装了 Calibre 词库或自行生成的字典放进 `字典/` 即自动纳入；
+- 再用 `kindle/dictbuild.py` 生成的 StarDict 字典（`dictionary/` 下的 `.idx` / `.dict`），
+  词库更大；装了 Calibre 词库或自行生成的字典放进 `dictionary/` 即自动纳入；
 - 查不到时给出「未收录」提示，英文短语自动回落到末词重查。
 
 词条按词缓存，重复查询不重复请求，不阻塞翻页渲染 —— 阅读流畅不受影响。
@@ -96,7 +96,7 @@ EPUB 转换**只动文本节点**，标签、样式、脚本、图片、字体�
 「超宽排版」书籍（内容宽到十万像素级）也不会出现「点右边却翻回上一页」的错乱，
 手势与渲染都不卡顿。
 
-> 阅读进度记在 `书架/进度.json`，划线标注记在 `书架/标注.json` —— 都是普通 JSON，
+> 阅读进度记在 `bookshelf/progress.json`，划线标注记在 `bookshelf/annotations.json` —— 都是普通 JSON，
 > 随时能打开看、能自己改、能备份。数据全程不联网。
 
 ### 本地语音合成（朗读 · Coqui TTS）
@@ -133,7 +133,7 @@ EPUB 转换**只动文本节点**，标签、样式、脚本、图片、字体�
 | `Kindle-Bridge-x.x.x.exe` | Windows | 单文件版，双击即用，无需安装 Python |
 | `kindle-bridge-x.x.x.zip` | 全平台 | 源码包，解压后用启动器运行 |
 
-> 单文件版把只读资源（网页、词表）打进 exe，**用户数据（`收书/`、`导出/`、`工具/`）落在 exe 旁边**——把 exe 放哪，就在哪放书、拿结果。
+> 单文件版把只读资源（网页、词表）打进 exe，**用户数据（`inbox/`、`export/`、`tools/`）落在 exe 旁边**——把 exe 放哪，就在哪放书、拿结果。
 
 ### 1.2 从源码获取
 
@@ -168,7 +168,7 @@ cd kindle-bridge
 
 - **A. 单文件 exe（最省事）**：双击 `Kindle-Bridge-x.x.x.exe`，浏览器自动打开。
 - **B. 启动器（源码用户推荐）**：
-  1. 双击 **`启动 Kindle桥.bat`**；
+  1. 双击 **`start-kindle-bridge.bat`**；
   2. 首次运行自动安装依赖（OpenCC）；未装 Python 会提示去官网下载；
   3. 浏览器自动打开 `http://127.0.0.1:8765/`。
 - **C. 命令行**：
@@ -254,7 +254,7 @@ docker run -d --name kb -p 8765:8765 \
 - **Python 版本**：Coqui TTS 仅支持 **3.9–3.11**。Ubuntu 22.04 自带 3.10 直接可用；24.04 自带 3.12，需另建 3.11 venv。
 - **编译依赖**：TTS 的 C 扩展需要 gcc，先 `sudo apt install build-essential python3-dev`（Linux 下无需 Windows SDK / MSVC，通常一条 `pip install` 即可）。
 - **模型下载**：TTS 模型首次合成从 HuggingFace 拉取；外网受限时设 `HF_ENDPOINT=https://hf-mirror.com`（Dockerfile 已默认写入）。
-- **USB 直连探测**：`device.py` 只扫 Windows 盘符，Linux 上失效。可用**手动挂载路径**（如 `/media/<用户>/Kindle`）或把书丢进 `收书/` 文件夹替代——所有本地功能（简繁、标注、生词、朗读、EPUB 阅读）完全不受影响。
+- **USB 直连探测**：`device.py` 只扫 Windows 盘符，Linux 上失效。可用**手动挂载路径**（如 `/media/<用户>/Kindle`）或把书丢进 `inbox/` 文件夹替代——所有本地功能（简繁、标注、生词、朗读、EPUB 阅读）完全不受影响。
 
 ### 2.4 命令行参数
 
@@ -280,7 +280,7 @@ python app.py --port 8765 --host 127.0.0.1 --no-browser
 
 用数据线把 Kindle 连上电脑，并在 Kindle 屏幕上点「**允许 USB 连接**」。
 
-> 设备自动识别依赖 Windows；macOS / Linux 下此功能受限。此时可改用**手动挂载路径**或把书直接放进 `收书/` 文件夹——简繁转换、标注/生词解析、阅读器、朗读等纯本地功能均不受影响。
+> 设备自动识别依赖 Windows；macOS / Linux 下此功能受限。此时可改用**手动挂载路径**或把书直接放进 `inbox/` 文件夹——简繁转换、标注/生词解析、阅读器、朗读等纯本地功能均不受影响。
 
 ### 3.2 各功能怎么用
 
@@ -296,7 +296,7 @@ python app.py --port 8765 --host 127.0.0.1 --no-browser
 - 其它路线（Send to Kindle、KOReader、直接拷 MOBI 家族）见界面内说明。
 
 **本地阅读器**
-- 「阅读器」页自动收拢 `收书/`、`导出/` 与连着设备里的书，点开即读。
+- 「阅读器」页自动收拢 `inbox/`、`export/` 与连着设备里的书，点开即读。
 - 翻页：键盘 `←/→` 或空格、鼠标点击（左 1/3 上页、右 1/3 下页、中间隐藏/显示顶底栏）、滚轮、触摸滑动；`Esc` 返回书架、`R` 朗读。
 - 主题（浅/护眼/深）、字号、行距、页宽可调；进度与划线自动记忆。
 
@@ -306,23 +306,23 @@ python app.py --port 8765 --host 127.0.0.1 --no-browser
 - 阅读器内按 `R` 或点 🔊 可朗读当前页 / 选中段落；勾「自动续读」读完自动翻下一页。
 
 **划词查词**
-- 在阅读器内选中正文词语，浮动工具条点「查词」，弹出释义卡片（中文带拼音、英文给释义），并可 🔊 朗读该词。先查内置小词典，再查 `字典/` 下的 StarDict 字典，全程离线。
+- 在阅读器内选中正文词语，浮动工具条点「查词」，弹出释义卡片（中文带拼音、英文给释义），并可 🔊 朗读该词。先查内置小词典，再查 `dictionary/` 下的 StarDict 字典，全程离线。
 
 **公版书库**
-- 「公版书库」页检索 Gutenberg / Standard Ebooks / Open Library / 维基文库 / 中文经典，取回后落入 `收书/`。
+- 「公版书库」页检索 Gutenberg / Standard Ebooks / Open Library / 维基文库 / 中文经典，取回后落入 `inbox/`。
 
 ### 3.3 数据与配置目录
 
 | 目录 / 文件 | 用途 |
 |---|---|
-| `收书/` | 放入待投递 / 待转换的电子书，公版书库取回也落这里 |
-| `导出/` | 所有产物（简繁结果、标注、生词、微信读书格式）落地处 |
-| `书架/` | 阅读进度 `进度.json`、划线标注 `标注.json`（普通 JSON，可备份/自改） |
-| `字典/` | 放入 StarDict 字典（`.idx`/`.dict`），网页阅读器与 KOReader 共用 |
-| `工具/缓存/阅读器/` | MOBI/AZW3 转 EPUB 的缓存（转一次秒开） |
+| `inbox/` | 放入待投递 / 待转换的电子书，公版书库取回也落这里 |
+| `export/` | 所有产物（简繁结果、标注、生词、微信读书格式）落地处 |
+| `bookshelf/` | 阅读进度 `进度.json`、划线标注 `标注.json`（普通 JSON，可备份/自改） |
+| `dictionary/` | 放入 StarDict 字典（`.idx`/`.dict`），网页阅读器与 KOReader 共用 |
+| `tools/cache/reader/` | MOBI/AZW3 转 EPUB 的缓存（转一次秒开） |
 | `~/.local/share/tts`（Linux）/ `AppData\Local\tts`（Windows） | 朗读声音模型缓存，首次使用自动下载 |
 
-**个性化配置**：阅读器主题、字号、翻页偏好等记在浏览器 `localStorage` 与 `书架/` 的两个 JSON 中，无需改代码。
+**个性化配置**：阅读器主题、字号、翻页偏好等记在浏览器 `localStorage` 与 `bookshelf/` 的两个 JSON 中，无需改代码。
 
 ---
 
@@ -346,14 +346,14 @@ kindle-bridge/
 ├── app.py                  # 主服务（标准库 http.server，无 Web 框架）
 ├── requirements.txt        # 核心依赖（仅 OpenCC）
 ├── requirements-tts.txt    # 可选：本地语音合成（Coqui TTS，需 Python 3.9~3.11）
-├── Kindle桥.spec           # 打包成单文件 exe（核心）
-├── Kindle桥-tts.spec       # 可选：把 TTS 也打进 exe 的全内置变体
+├── kindle-bridge.spec           # 打包成单文件 exe（核心）
+├── kindle-bridge-tts.spec       # 可选：把 TTS 也打进 exe 的全内置变体
 ├── kindle/                 # 各功能模块
 │   ├── paths.py            # 资源目录 / 数据目录分离（为单文件 exe 准备）
 │   ├── hanzi.py            # 简繁转换内核（OpenCC + 异体补丁 + 短语保护）
 │   ├── epub.py             # EPUB 容器读写、简繁转换、EPUB 体检
 │   ├── tts.py              # 本地语音合成封装（Coqui TTS，可选功能）
-│   ├── reader.py           # 本地阅读器后端（书架/元信息/封面/TXT 打包/进度标注）
+│   ├── reader.py           # 本地阅读器后端（bookshelf/元信息/封面/TXT 打包/进度标注）
 │   ├── dictdata.py         # 阅读器划词查词后端（内置小词典 + StarDict 查询）
 │   ├── zhconv_file.py      # 文件级转换入口（EPUB / TXT）
 │   ├── device.py           # Kindle USB 设备识别（ctypes 直连）
@@ -370,12 +370,12 @@ kindle-bridge/
 ├── miniprogram/            # 微信小程序源码
 ├── _test/                  # 回归测试
 ├── _tools/                 # 抓取语料、打发布包
-├── 收书/                    # ← 放电子书，工具会从这里取
-├── 书架/                    # ← 阅读器的进度与标注（两个 JSON）
-└── 导出/                    # ← 所有产物都落在这里
+├── inbox/                    # ← 放电子书，工具会从这里取
+├── bookshelf/                    # ← 阅读器的进度与标注（两个 JSON）
+└── export/                    # ← 所有产物都落在这里
 ```
 
-**数据目录约定**：`收书/` 放待投递的书，`导出/` 放产物。都是普通文件夹，随时可以直接打开。
+**数据目录约定**：`inbox/` 放待投递的书，`export/` 放产物。都是普通文件夹，随时可以直接打开。
 
 ## 常见操作
 
@@ -401,9 +401,9 @@ python kindle/dictbuild.py
 
 从公开词表 [CC-CEDICT](https://www.mdbg.net/chinese/dictionary?page=cc-cedict) 打包出两部
 **StarDict** 字典 —— 简体词头版（读简体书用）与繁體词头版（读繁体公版书用），
-含拼音与释义。生成后把 `字典/` 下两个子文件夹整体拷进 KOReader 的 `dicts/` 目录即可。
+含拼音与释义。生成后把 `dictionary/` 下两个子文件夹整体拷进 KOReader 的 `dicts/` 目录即可。
 
-> 生成的字典放进 `字典/` 后，**网页阅读器的「划词查词」也会自动用它**（没放也能查，
+> 生成的字典放进 `dictionary/` 后，**网页阅读器的「划词查词」也会自动用它**（没放也能查，
 > 会先回落到内置小词典），一份数据两处用。
 
 > 词库需在**能联网**的机器上生成；本机若装不了 OpenCC，转换会退回内置小词表。
@@ -436,7 +436,7 @@ python _test/run-regression.py --only reader tts
 ```bash
 python _test/test-hanzi.py     # 繁简转换 + EPUB 体检
 python _test/test-zhconv.py    # 简繁转换全链路（含 HTTP 端到端）
-python _test/test-reader.py    # 阅读器：书架/封面/TXT 打包/Calibre 转换/进度标注
+python _test/test-reader.py    # 阅读器：bookshelf/封面/TXT 打包/Calibre 转换/进度标注
 python _test/test-dict.py      # 划词查词：内置词典命中/大小写/标点/未收录 + HTTP 端到端
 python _test/test-tts.py       # 朗读：分句、声音目录、未安装时降级
 ```
@@ -469,21 +469,21 @@ python _tools/make_release.py            # 生成 _release/kindle-bridge-<版本
 ```
 
 发布包只含源码、依赖清单、文档和启动器，**不含**任何用户数据
-（`导出/`、`收书/`、`工具/`、`corpus/` 都被排除）。
+（`export/`、`inbox/`、`tools/`、`corpus/` 都被排除）。
 
 打成单文件 exe（需先 `pip install pyinstaller`）：
 
 ```bash
-pyinstaller Kindle桥.spec
+pyinstaller kindle-bridge.spec
 ```
 
 产物在 `dist/`。冻结后只读资源（`web/`、`kindle/data/`）走解包目录，
-用户数据（`收书/`、`导出/`、`工具/`）落在 **exe 旁边** —— 这条分界由 `kindle/paths.py` 统一管理。
+用户数据（`inbox/`、`export/`、`tools/`）落在 **exe 旁边** —— 这条分界由 `kindle/paths.py` 统一管理。
 
 想要一个**连 TTS 都不用装**的朗读版，用另一个 spec（体积几百 MB 起，需 Python 3.9~3.11）：
 
 ```bash
-pyinstaller "Kindle桥-tts.spec"
+pyinstaller "kindle-bridge-tts.spec"
 ```
 
 ## 设计取向

@@ -111,19 +111,19 @@ def write(name: str, blob: bytes) -> str:
 
 def make_samples() -> list[str]:
     made = []
-    made.append(write("01-正常MOBI6.mobi",
+    made.append(write("01-normal-mobi6.mobi",
                       build_mobi("测试书 · 正常样本", "某作者")))
-    made.append(write("02-双格式AZW3.azw3",
+    made.append(write("02-dual-format-azw3.azw3",
                       build_mobi("测试书 · 双格式", "某作者", kf8=True, version=8)))
-    made.append(write("03-带DRM的AZW.azw",
+    made.append(write("03-drm-azw.azw",
                       build_mobi("测试书 · 加密", "某作者", drm=True, name_field="CR!ZY71PGADTN4CH")))
-    made.append(write("04-纯KF8.kfx", b"\xeaDRMION\xee\xe0\x01\x00\xea\xee\x9e\x81\x83" + b"\x00" * 200))
-    made.append(write("05-截断文件.mobi", build_mobi("坏文件", "x", truncate=40)))
-    made.append(write("06-其实是EPUB.mobi", b"PK\x03\x04" + b"\x00" * 300))
-    made.append(write("07-非电子书.mobi",
+    made.append(write("04-pure-kf8.kfx", b"\xeaDRMION\xee\xe0\x01\x00\xea\xee\x9e\x81\x83" + b"\x00" * 200))
+    made.append(write("05-truncated.mobi", build_mobi("坏文件", "x", truncate=40)))
+    made.append(write("06-actually-epub.mobi", b"PK\x03\x04" + b"\x00" * 300))
+    made.append(write("07-not-ebook.mobi",
                       build_mobi("x", "y", pdb_type=b"DATA", nrec_hint=2)))
 
-    ep = os.path.join(OUT, "08-真EPUB.epub")
+    ep = os.path.join(OUT, "08-real-epub.epub")
     with zipfile.ZipFile(ep, "w") as z:
         z.writestr("mimetype", "application/epub+zip")
         z.writestr("META-INF/container.xml", "<container/>")

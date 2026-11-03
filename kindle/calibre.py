@@ -27,7 +27,7 @@ from urllib.parse import urlparse
 from . import paths as _paths
 
 BASE_DIR = _paths.data_dir()
-TOOL_DIR = os.path.join(BASE_DIR, "工具")
+TOOL_DIR = os.path.join(BASE_DIR, "tools")
 
 # 官方分发入口：302 跳到当前版本的安装包。官方页面亦可。
 ENTRY_URL = "https://calibre-ebook.com/dist/win64"

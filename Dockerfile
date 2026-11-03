@@ -1,6 +1,6 @@
 # Kindle Bridge 容器镜像（Debian/Ubuntu 系基础，Python 3.11 以兼容 Coqui TTS）
 # 构建： docker build -t kindle-bridge .
-# 运行： docker run -d --name kb -p 8765:8765 -v "$(pwd)/Inbox:/app/Inbox" -v "$(pwd)/Export:/app/Export" kindle-bridge
+# 运行： docker run -d --name kb -p 8765:8765 -v "$(pwd)/inbox:/app/inbox" -v "$(pwd)/export:/app/export" kindle-bridge
 FROM python:3.11-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \

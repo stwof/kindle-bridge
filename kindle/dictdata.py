@@ -38,13 +38,13 @@ def _load_quick() -> dict:
 
 
 def _scan_stardict() -> dict:
-    """找数据目录下「字典/」里的 StarDict 三件套（.ifo/.idx/.dict）。
+    """找数据目录下 dictionary/ 里的 StarDict 三件套（.ifo/.idx/.dict）。
 
     源码运行时根目录即仓库根；冻结成 exe 后走 paths.data_dir()（exe 所在目录），
     与 dictbuild.py 的产出位置保持一致。
     """
     root = _paths.data_dir()
-    droot = os.path.join(root, "字典")
+    droot = os.path.join(root, "dictionary")
     out: dict = {}
     if not os.path.isdir(droot):
         return out

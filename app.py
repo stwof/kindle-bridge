@@ -31,8 +31,8 @@ from kindle import paths as paths_mod                 # noqa: E402
 RES_DIR = paths_mod.resource_dir()
 WEB_DIR = os.path.join(RES_DIR, "web")
 BASE_DIR = paths_mod.data_dir()
-OUT_DIR = os.path.join(BASE_DIR, "导出")
-INBOX_DIR = os.path.join(BASE_DIR, "收书")        # 待投递的电子书放这里
+OUT_DIR = os.path.join(BASE_DIR, "export")
+INBOX_DIR = os.path.join(BASE_DIR, "inbox")        # 待投递的电子书放这里
 
 from kindle import calibre as cal_mod            # noqa: E402
 from kindle import classics as cls_mod           # noqa: E402
@@ -496,7 +496,7 @@ class Handler(BaseHTTPRequestHandler):
         if not books:
             return self._json({"error": "没有选中任何书籍"}, 400)
 
-        out_dir = os.path.join(OUT_DIR, "微信读书")
+        out_dir = os.path.join(OUT_DIR, "wechat-read")
         if mode == "convert":
             results = conv_mod.convert_books(books, target, out_dir)
         else:
@@ -546,7 +546,7 @@ class Handler(BaseHTTPRequestHandler):
         info = deliv_mod.route_info(self._device_documents())
         info["inbox"] = INBOX_DIR
         info["out"] = {
-            "kindle": os.path.join(OUT_DIR, "Kindle书"),
+            "kindle": os.path.join(OUT_DIR, "kindle-books"),
             "send": os.path.join(OUT_DIR, "SendToKindle"),
             "koreader": os.path.join(OUT_DIR, "KOReader书库"),
         }
@@ -781,7 +781,7 @@ class Handler(BaseHTTPRequestHandler):
         direction = self._zh_prepare(self.headers.get("X-Direction") or "auto")
         want_inbox = (self.headers.get("X-Inbox") or "").strip() == "1"
 
-        tmp = os.path.join(OUT_DIR, "简繁转换")
+        tmp = os.path.join(OUT_DIR, "traditional")
         os.makedirs(tmp, exist_ok=True)
         src = os.path.join(tmp, name)
         base, ext = os.path.splitext(name)
@@ -839,7 +839,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"error": "文件不在「收书」文件夹里"}, 400)
         direction = self._zh_prepare(payload.get("direction") or "auto")
 
-        tmp = os.path.join(OUT_DIR, "简繁转换")
+        tmp = os.path.join(OUT_DIR, "traditional")
         os.makedirs(tmp, exist_ok=True)
         base, ext = os.path.splitext(os.path.basename(p))
         out = os.path.join(tmp, f"{base}.conv{ext}")

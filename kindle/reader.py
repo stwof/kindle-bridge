@@ -36,11 +36,11 @@ MOBI_EXT = (".mobi", ".azw", ".azw3", ".prc")
 READABLE_EXT = (EPUB_EXT,) + TXT_EXT + MOBI_EXT
 
 _DATA = paths_mod.data_dir()
-SHELF_DIR = os.path.join(_DATA, "书架")
-PROGRESS_PATH = os.path.join(SHELF_DIR, "进度.json")
-ANNOT_PATH = os.path.join(SHELF_DIR, "标注.json")
-_BOOKS_CACHE = os.path.join(_DATA, "工具", "缓存", "阅读器", "书籍")
-_COVERS_CACHE = os.path.join(_DATA, "工具", "缓存", "阅读器", "封面")
+SHELF_DIR = os.path.join(_DATA, "bookshelf")
+PROGRESS_PATH = os.path.join(SHELF_DIR, "progress.json")
+ANNOT_PATH = os.path.join(SHELF_DIR, "annotations.json")
+_BOOKS_CACHE = os.path.join(_DATA, "tools", "cache", "reader", "books")
+_COVERS_CACHE = os.path.join(_DATA, "tools", "cache", "reader", "covers")
 
 _MAX_TEXT_BYTES = 4 * 1024 * 1024        # TXT 单本上限
 _CHUNK_PARAS = 260                        # TXT 每章多少段（切太碎目录会很长）
@@ -254,9 +254,9 @@ def cover_cached(path: str, key: str) -> tuple[str, str] | None:
 # ---------------------------------------------------------------------------
 def _shelf_dirs() -> list[tuple[str, str]]:
     return [
-        ("收书", os.path.join(_DATA, "收书")),
-        ("Kindle 书", os.path.join(_DATA, "导出", "Kindle书")),
-        ("微信读书", os.path.join(_DATA, "导出", "微信读书")),
+        ("收书", os.path.join(_DATA, "inbox")),
+        ("Kindle 书", os.path.join(_DATA, "export", "kindle-books")),
+        ("微信读书", os.path.join(_DATA, "export", "wechat-read")),
     ]
 
 

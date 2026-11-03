@@ -30,7 +30,7 @@ try:                                    # 源码运行时是包内模块，冻�
 except ImportError:                     # 直接当脚本跑： kindle/dictbuild.py
     _DATA_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-OUT_DEFAULT = os.path.normpath(os.path.join(_DATA_ROOT, "字典"))
+OUT_DEFAULT = os.path.normpath(os.path.join(_DATA_ROOT, "dictionary"))
 
 # 候选下载源（任一可用即可；GitHub raw 在国内常被墙，多列几个备用）。
 # 注意：这些是「尽力而为」的源，若都失效，脚本会教你手动下载后 --source 指定。
@@ -118,10 +118,10 @@ def build_from_txt(txt_path: str, out_dir: str) -> dict:
             t, s, d = p
             simp.setdefault(s, []).append(d)
             trad.setdefault(t, []).append(d)
-    r1 = write_stardict(simp, os.path.join(out_dir, "简体字典 (CC-CEDICT)"),
-                        "CC-CEDICT 简体中文")
-    r2 = write_stardict(trad, os.path.join(out_dir, "繁體字典 (CC-CEDICT)"),
-                        "CC-CEDICT 繁體中文")
+    r1 = write_stardict(simp, os.path.join(out_dir, "Simplified (CC-CEDICT)"),
+                        "CC-CEDICT Simplified Chinese")
+    r2 = write_stardict(trad, os.path.join(out_dir, "Traditional (CC-CEDICT)"),
+                        "CC-CEDICT Traditional Chinese")
     return {"simplified": r1, "traditional": r2}
 
 
@@ -179,8 +179,8 @@ def write_readme(out_dir: str) -> str:
         "CC-CEDICT 简繁字典（StarDict 格式）\n"
         "====================================\n\n"
         "本文件夹内含两部字典，都是 KOReader 原生支持的 StarDict 格式：\n"
-        "  · 简体字典 (CC-CEDICT)/  —— 词头是简体，读简体书时划词查词用\n"
-        "  · 繁體字典 (CC-CEDICT)/  —— 词头是繁体，读繁体公版书时划词查词用\n\n"
+        "  · Simplified (CC-CEDICT)/  —— 词头是简体，读简体书时划词查词用\n"
+        "  · Traditional (CC-CEDICT)/  —— 词头是繁体，读繁体公版书时划词查词用\n\n"
         "如何装进 KOReader：\n"
         "  1. 用数据线把 Kindle 连上电脑，进入 KOReader 的字典目录，通常是：\n"
         "        KOReader/dicts/\n"
@@ -196,7 +196,7 @@ def write_readme(out_dir: str) -> str:
         "      python kindle/dictbuild.py\n"
         "  若想用自己已有的 cedict 文本，指定路径即可：\n"
         "      python kindle/dictbuild.py --source /path/to/cedict_1_0_ts_utf-8.txt\n"
-        "  输出默认在 Kindle 桥根目录下的「字典/」文件夹。\n"
+        "  输出默认在 Kindle 桥根目录下的 dictionary/ 文件夹。\n"
     )
     with open(readme, "w", encoding="utf-8") as f:
         f.write(text)

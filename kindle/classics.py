@@ -24,8 +24,8 @@ from . import paths as _paths
 
 BASE_DIR = _paths.data_dir()
 CORPUS_DIR = os.path.join(BASE_DIR, "corpus", "chinese-poetry")
-CACHE_DIR = os.path.join(BASE_DIR, "工具", "缓存")
-INDEX_FILE = os.path.join(CACHE_DIR, "经典索引.json")
+CACHE_DIR = os.path.join(BASE_DIR, "tools", "cache")
+INDEX_FILE = os.path.join(CACHE_DIR, "classics-index.json")
 
 LICENSE_NOTE = "MIT"
 

@@ -1,13 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller 打包配置 —— 把 TTS（Coqui TTS + PyTorch）也打进单文件 exe。
 
-⚠️ 这是「朗读」功能的**全内置**变体，和默认的 Kindle桥.spec 二选一：
+⚠️ 这是「朗读」功能的**全内置**变体，和默认的 kindle-bridge.spec 二选一：
     · 默认 spec：体积小（~10 MB），但「朗读」需要先 pip install -r requirements-tts.txt。
     · 本 spec ：把 Coqui TTS + PyTorch 全打进去，exe 双击即用、无需装 Python，
                 但体积会变成几百 MB ~ 1 GB+，构建也更慢。
 
 仅当你想要一个「什么依赖都不用装」的朗读版时才用：
-    pyinstaller "Kindle桥-tts.spec"
+    pyinstaller "kindle-bridge-tts.spec"
 
 注意：
   · Coqui TTS 只支持 Python 3.9 ~ 3.11，请用对应版本的解释器来打包。
@@ -59,7 +59,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name="Kindle桥-带朗读",
+    name="kindle-bridge-tts",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
