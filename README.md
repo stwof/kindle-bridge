@@ -190,6 +190,33 @@ chmod +x start.sh
 启动器会依次：选用 `.venv/bin/python` 或系统 `python3` → 缺依赖时自动装 OpenCC → 启动服务。
 **无图形界面（headless）或 SSH 会话下自动加 `--no-browser`**，避免无谓报错。
 
+#### 2.2.1 WSL / 无 systemd 环境（后台常驻，推荐给桌面 WSL 用户）
+
+WSL 默认没有可用的 systemd 用户总线（`systemctl --user` 会报 `Failed to connect to bus`），
+此时不必折腾 systemd，用仓库自带的 `run.sh` 直接后台拉起即可：
+
+```bash
+cd ~/projects/kindle-bridge
+# 1) 建虚拟环境（WSL 默认 Python 通常是 3.10，正好在 TTS 支持的 3.9~3.11 区间内）
+sudo apt install -y python3-venv python3-pip
+python3 -m venv .venv            # 也可命名为 venv，run.sh 两者都认
+. .venv/bin/activate
+pip install -r requirements.txt             # 必装（仅 OpenCC）
+pip install -r requirements-tts.txt         # 可选（要「朗读」才装，需 Python 3.9~3.11）
+
+# 2) 后台启动（setsid 让它脱离终端，关掉窗口也不死）
+setsid ./run.sh &
+sleep 3
+tail -f ~/kb.log               # 看到「Kindle 桥已启动」即成功
+```
+
+浏览器打开 `http://localhost:8765/` 即可。
+
+> **端口占用保护**：`app.py` 自带检测——若 8765 已被旧实例占用，新实例会拒绝启动并提示。
+> 想重启时先结束旧进程：`pkill -f "app.py --host 127.0.0.1"`，再重新 `setsid ./run.sh &`。
+> 想进 WSL 自动拉起，可在 `~/.bashrc` 末尾加一行：
+> `pgrep -f "app.py --host 127.0.0.1" >/dev/null || setsid ~/projects/kindle-bridge/run.sh &`
+
 ### 2.3 Linux 生产部署（开机自启、后台常驻）
 
 代码层已跨平台，无需改动即可在 Linux 运行。以下任选其一让服务常驻：
