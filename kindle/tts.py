@@ -60,6 +60,17 @@ _CATALOG: dict[str, dict] = {
 }
 DEFAULT_VOICE = "zh-baker"
 
+# 声音别名：方便手动调接口或老调用方用简称（如 "zh"）指代稳定 ID。
+# 前端下拉永远用 _CATALOG 的正式 key，别名只是个宽松兜底。
+_VOICE_ALIASES: dict[str, str] = {
+    "zh": "zh-baker",
+    "cn": "zh-baker",
+    "chinese": "zh-baker",
+    "en": "en-ljspeech",
+    "english": "en-ljspeech",
+    "zh-cn": "zh-baker",
+}
+
 # 单句最长字数：超过就按逗号/长度再切，避免 Coqui 截断或卡死
 _CHUNK_LIMIT = 120
 # 句间静音（秒），让朗读有自然停顿
@@ -275,6 +286,7 @@ def synth(text: str, voice: str | None = None) -> dict:
         raise TTSSError("未安装 Coqui TTS，请先 pip install -r requirements-tts.txt 后重启服务")
 
     key = voice or DEFAULT_VOICE
+    key = _VOICE_ALIASES.get(key, key)  # 别名兜底，避免 "zh" 之类简称直接当模型名去加载
     info = _CATALOG.get(key)
     if info is None:
         # 允许直接传 model_name 当声音标识

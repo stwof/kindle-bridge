@@ -120,6 +120,25 @@ EPUB 转换**只动文本节点**，标签、样式、脚本、图片、字体�
 > ```
 > 重启 Kindle 桥即可。「朗读」页在没装 TTS 时会明确提示怎么装，不影响其它功能。
 
+#### TTS 排障记录（已修复并验证）
+
+- **`setuptools` 版本把 `pkg_resources` 删了 → 「未安装 Coqui TTS」误报**
+  Coqui TTS → librosa 的深导入链需要 `pkg_resources`。当 venv 里的 `setuptools`
+  升到移除 `pkg_resources` 的版本（如 84.x）时，旧版 `available()` 只做浅导入
+  `import TTS`，看不到深链缺失，会**误报「就绪」**，真正合成时才炸。
+  现 `available()` 已改为深导入 `from TTS.api import TTS` 并透传真实失败原因
+  （`/api/status` 的 `tts.detail` 字段可见）。`requirements-tts.txt` 已钉死
+  `setuptools==69.5.1`（仍自带 `pkg_resources`）兜底。
+  **验证**：`/api/status` 返回 `available:true, detail:null, backend:"coqui-tts 0.22.0"`。
+- **手动调接口用简称会 400**
+  `/api/tts` 的 `voice` 只认正式 ID（`zh-baker` / `zh-baker-dca` / `multi-yourtts` /
+  `en-ljspeech`，见 `/api/tts/voices`）。传 `"zh"` 这类简称会被当成模型名去加载而失败。
+  已加别名兜底：`zh`/`cn`/`chinese`/`zh-cn` → `zh-baker`，`en`/`english` → `en-ljspeech`。
+  前端下拉用的是正式 ID，不会踩到。
+- **WSL 上服务「启动即退」**
+  若 8765 端口已有一个 Kindle 桥进程，`app.py` 自检到端口被占会主动退出（非崩溃）。
+  重启前先 `fuser -k 8765/tcp; pkill -f app.py` 清掉旧进程再启动。
+
 ## 一、代码下载
 
 获取项目源码，并确认本机满足前置依赖。
