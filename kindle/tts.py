@@ -135,13 +135,31 @@ def _split_long(c: str, limit: int = _CHUNK_LIMIT) -> list[str]:
 # ---------------------------------------------------------------------------
 # 可用性检测 / 元信息
 # ---------------------------------------------------------------------------
+# 最近一次 available() 判 False 时的真实失败原因，供 /api/status 透传前端
+_avail_detail: str | None = None
+
+
 def available() -> bool:
-    """Coqui TTS 是否已安装（无需模型已下载，模型在首次合成时按需拉取）。"""
+    """Coqui TTS 是否可用。
+
+    不仅要求包已安装，还要能深导入到 TTS.api（真正合成所需）。
+    仅浅导入 ``import TTS`` 能过、但深导入 ``from TTS.api import TTS`` 失败
+    （典型如 venv 里 pkg_resources 缺失导致 librosa 导入链断）时，不应误报「就绪」。
+    """
+    global _avail_detail
     try:
         import TTS  # noqa: F401
+        from TTS.api import TTS as _TTSApi  # noqa: F401  深导入，暴露依赖缺失
+        _avail_detail = None
         return True
-    except Exception:
+    except Exception as ex:
+        _avail_detail = f"{type(ex).__name__}: {ex}"
         return False
+
+
+def availability_detail() -> str | None:
+    """返回最近一次 available() 判 False 时的真实原因；可用时返回 None。"""
+    return _avail_detail
 
 
 def backend() -> str | None:
@@ -225,9 +243,17 @@ def _get_model(model_name: str):
     if model_name in _MODEL_CACHE:
         return _MODEL_CACHE[model_name]
     try:
+        import TTS  # noqa: F401
         from TTS.api import TTS
-    except Exception as ex:  # pragma: no cover - 没装时由 available() 挡在前面
-        raise TTSSError("未安装 Coqui TTS，请先 pip install -r requirements-tts.txt 后重启服务") from ex
+    except ImportError as ex:  # 真的没装
+        raise TTSSError(
+            "未安装 Coqui TTS，请先 pip install -r requirements-tts.txt 后重启服务"
+        ) from ex
+    except Exception as ex:  # 装了但深导入炸（如 pkg_resources/librosa 依赖缺失）
+        raise TTSSError(
+            "Coqui TTS 已安装但加载失败（通常是依赖缺失，如 setuptools/pkg_resources 不完整）："
+            f"{ex}"
+        ) from ex
     _patch_torch_for_tts()  # 必须在构造 TTS() 加载检查点之前打补丁
     try:
         tts = TTS(model_name=model_name, progress_bar=False, gpu=False)

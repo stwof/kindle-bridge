@@ -211,7 +211,8 @@ class Handler(BaseHTTPRequestHandler):
                 "zhconv": {"backend": hanzi_mod.backend(),
                            "available": hanzi_mod.available()},
                 "tts": {"backend": tts_mod.backend(),
-                        "available": tts_mod.available()},
+                        "available": tts_mod.available(),
+                        "detail": tts_mod.availability_detail()},
             })
         if path == "/api/data":
             q = urlparse(self.path).query
