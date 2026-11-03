@@ -24,3 +24,9 @@
 # kindle/tts.py 中针对 PyTorch>=2.6 的 torch.load 补丁匹配。
 TTS==0.22.0
 
+# 钉死 setuptools：新版（≥81）已移除 pkg_resources，而 TTS→librosa 的深导入链仍
+# `from pkg_resources import resource_filename`。缺失时表现为「TTS 装好了，但一生成就
+# 报 ModuleNotFoundError: No module named 'pkg_resources'」（旧代码还会误报“未安装”）。
+# 钉到仍含 pkg_resources 的最后一个稳定版，确保深导入可用。
+setuptools==69.5.1
+
