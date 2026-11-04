@@ -2103,10 +2103,37 @@ const readerSpeech = (() => {
     if (!res.ok) return false;
     const blob = await res.blob();
     if (mySeq !== S.seq) return false;    // 期间用户又点了别的，这段作废
+    // 后端把每句起止时间放在 X-Tts-Meta 头里，供「句子级跟读」逐句高亮
+    let segments = [];
+    const metaB64 = res.headers.get('X-Tts-Meta');
+    if (metaB64) {
+      try {
+        const meta = JSON.parse(atob(metaB64));
+        segments = meta.segments || [];
+      } catch (e) { segments = []; }
+    }
     return await new Promise((resolve) => {
       const url = URL.createObjectURL(blob);
       const a = new Audio(url);
       S.audio = a;
+      let lastIdx = -1;
+      // 播放中按当前时间定位当前句，把那一句同步到字幕条（句子级跟读）
+      a.ontimeupdate = () => {
+        if (!segments.length) return;
+        const t = a.currentTime;
+        let idx = -1;
+        for (let i = 0; i < segments.length; i++) {
+          if (t >= segments[i].start && t < segments[i].end) { idx = i; break; }
+        }
+        // 收尾：最后一句话音落定前保持高亮
+        if (idx === -1 && segments.length && t >= segments[segments.length - 1].start) {
+          idx = segments.length - 1;
+        }
+        if (idx !== lastIdx) {
+          lastIdx = idx;
+          if (idx >= 0) setBar(segments[idx].text);
+        }
+      };
       a.onended = () => { URL.revokeObjectURL(url); resolve(true); };
       a.onerror = () => { URL.revokeObjectURL(url); resolve(false); };
       a.play().catch(() => { URL.revokeObjectURL(url); resolve(false); });

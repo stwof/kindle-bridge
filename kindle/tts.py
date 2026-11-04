@@ -320,6 +320,9 @@ def synth(text: str, voice: str | None = None) -> dict:
 
     waves: list[np.ndarray] = []
     pause = np.zeros(int(sr * _PAUSE_SEC), dtype=np.float32)
+    # 逐句合成并记录每句在合成音频里的起止时间（秒），供前端「句子级跟读」高亮。
+    segments: list[dict] = []
+    cursor = 0.0
     for ch in chunks:
         if not ch.strip():
             continue
@@ -332,8 +335,12 @@ def synth(text: str, voice: str | None = None) -> dict:
             w = tts.tts(text=ch, **kw)
         except Exception as ex:
             raise TTSSError(f"合成失败（句：「{ch[:20]}…」）：{ex}") from ex
-        waves.append(np.asarray(w, dtype=np.float32))
+        w = np.asarray(w, dtype=np.float32)
+        dur = len(w) / sr
+        segments.append({"text": ch, "start": round(cursor, 3), "end": round(cursor + dur, 3)})
+        waves.append(w)
         waves.append(pause)
+        cursor += dur + _PAUSE_SEC
 
     if not waves:
         raise TTSSError("生成失败：文本为空或无法合成")
@@ -348,7 +355,8 @@ def synth(text: str, voice: str | None = None) -> dict:
         "sr": sr,
         "samples": int(len(full)),
         "duration": round(len(full) / sr, 2),
-        "chunks": len([w for w in waves if len(w) != len(pause)]),
+        "chunks": len(segments),
+        "segments": segments,
         "voice": key,
         "model": model_name,
         "speaker": speaker,

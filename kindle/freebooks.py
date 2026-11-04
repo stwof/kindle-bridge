@@ -88,6 +88,11 @@ SOURCES = [
     {"id": "se", "name": "标准电子书"},
     {"id": "openlibrary", "name": "Open Library"},
     {"id": "wikisource", "name": "维基文库"},
+    {"id": "internetarchive", "name": "Internet Archive"},
+    {"id": "feedbooks", "name": "Feedbooks"},
+    {"id": "manybooks", "name": "ManyBooks"},
+    {"id": "gutenberg-au", "name": "古登堡澳洲"},
+    {"id": "fadedpage", "name": "Faded Page"},
     {"id": "classics", "name": "中文经典"},
 ]
 
@@ -482,6 +487,242 @@ def _wikisource(q: str, lang: str, page: int) -> dict:
     return {"items": items, "count": total}
 
 
+# ---------------------------------------------------------------------------
+# 新增公版书源（2026-11）：Internet Archive / Feedbooks / ManyBooks /
+# 古登堡澳洲 / Faded Page。前四个以英文公版为主，中文检索（lang=zh）时跳过，
+# 避免空搜；中文走古登堡 + 中文经典两条既有线。
+# 这些站点的 HTML/OPDS 结构可能随改版变化；取书管线已有「验货 + 断点续传 +
+# 失败优雅报错」兜底，单源爬取失败不会拖垮整体检索，列表为空也只是少一路结果。
+# ---------------------------------------------------------------------------
+IA_SEARCH = "https://archive.org/advancedsearch.php"
+
+
+def _internet_archive(q: str, lang: str, page: int) -> dict:
+    """Internet Archive —— 海量公版扫描本（含古登堡之外更多格式 / EPUB / TXT）。
+
+    走 advancedsearch JSON（fl[] 多值字段用重复键传，urlencode(doseq=True)），
+    限定 mediatype:texts 且含 EPUB，保证每条都能直接下 EPUB。下载直链 download/{id}/{id}.epub。
+    """
+    qry = (q or "classic literature").strip()
+    qfmt = f"({qry}) AND mediatype:texts AND format:EPUB"
+    params = {
+        "q": qfmt,
+        "fl[]": ["identifier", "title", "creator", "mediatype", "downloads"],
+        "rows": "24",
+        "page": str(max(1, page)),
+        "output": "json",
+    }
+    url = IA_SEARCH + "?" + urllib.parse.urlencode(params, doseq=True)
+    try:
+        raw = json.loads(_get(url, timeout=SEARCH_TIMEOUT, tries=3).decode("utf-8"))
+    except (ValueError, UnicodeDecodeError) as ex:
+        raise FreeError("Internet Archive 返回的 JSON 无法解析") from ex
+    docs = (raw.get("response") or {}).get("docs") or []
+    items = []
+    for b in docs:
+        ident = (b.get("identifier") or "").strip()
+        if not ident:
+            continue
+        title = b.get("title") or ""
+        if isinstance(title, list):
+            title = title[0] if title else ""
+        title = (title or "").strip() or "（无标题）"
+        creators = b.get("creator") or []
+        if isinstance(creators, str):
+            creators = [creators]
+        author = "、".join(str(c) for c in creators[:3] if c) or "佚名"
+        dl = f"https://archive.org/download/{ident}/{ident}.epub"
+        items.append({
+            "id": f"ia:{ident}",
+            "source": "internetarchive",
+            "source_name": "Internet Archive",
+            "title": title,
+            "author": author,
+            "langs": ["en"],
+            "downloads": int(b.get("downloads") or 0),
+            "page_url": f"https://archive.org/details/{ident}",
+            "cover": "",
+            "files": [{
+                "label": "EPUB（经 Internet Archive）", "ext": ".epub", "native": False,
+                "url": dl, "note": "IA 公版全文 EPUB，需转换后送 Kindle",
+            }],
+            "subjects": [],
+        })
+    total = (raw.get("response") or {}).get("numFound") or len(items)
+    return {"items": items, "count": total}
+
+
+FB_OPDS = "https://www.feedbooks.com/search.opds"
+
+
+def _feedbooks(q: str, lang: str, page: int) -> dict:
+    """Feedbooks 公版目录 —— 标准 OPDS/Atom，条目带 .epub 获取链接。最佳努力。
+
+    Feedbooks 站点带 Cloudflare 质询，脚本访问可能被拦；拦了就安静返回空，不影响其它书源。
+    解析按 <entry>/<title>/<author><name>/<link rel=*acquisition*> 提取 .epub 链接。
+    """
+    qry = (q or "classic").strip()
+    url = f"{FB_OPDS}?query={urllib.parse.quote(qry)}"
+    doc = _get(url, timeout=SEARCH_TIMEOUT_FAST, tries=2).decode("utf-8", "ignore")
+    items = []
+    for block in doc.split("<entry>")[1:]:
+        block = block.split("</entry>")[0]
+        def _tag(tag):
+            m = re.search(rf"<{tag}[^>]*>(.*?)</{tag}>", block, re.S)
+            return html.unescape(m.group(1)).strip() if m else ""
+        title = _tag("title")
+        author = _tag("name")
+        if not title:
+            continue
+        href = ""
+        for lm in re.finditer(r'<link[^>]*rel="([^"]*acquisition[^"]*)"[^>]*href="([^"]+)"', block):
+            if lm.group(2).lower().endswith(".epub"):
+                href = lm.group(2)
+                break
+        if not href:
+            m = re.search(r'href="([^"]+\.epub)"', block)
+            if m:
+                href = m.group(1)
+        if not href:
+            continue
+        if href.startswith("//"):
+            href = "https:" + href
+        elif href.startswith("/"):
+            href = "https://www.feedbooks.com" + href
+        pid = ""
+        m = re.search(r"<id>([^<]+)</id>", block)
+        if m:
+            pid = m.group(1)
+        items.append({
+            "id": f"fb:{href}",
+            "source": "feedbooks", "source_name": "Feedbooks",
+            "title": title, "author": author or "佚名", "langs": ["en"],
+            "downloads": 0, "page_url": pid, "cover": "",
+            "files": [{
+                "label": "EPUB（经 Feedbooks）", "ext": ".epub", "native": False,
+                "url": href, "note": "Feedbooks 公版 EPUB，需转换后送 Kindle",
+            }],
+            "subjects": [],
+        })
+        if len(items) >= 24:
+            break
+    return {"items": items, "count": len(items)}
+
+
+MB_SEARCH = "https://manybooks.net/search"
+
+
+def _manybooks(q: str, lang: str, page: int) -> dict:
+    """ManyBooks —— 公版书聚合站（免费、带封面与简介）。HTML 爬取，最佳努力。
+
+    站点结构若改版，选择器需跟着调；取书管线会先验货，爬错只报一次失败，不污染其它源。
+    """
+    qry = (q or "classic literature").strip()
+    url = f"{MB_SEARCH}?q={urllib.parse.quote(qry)}"
+    doc = _get(url, timeout=SEARCH_TIMEOUT, tries=3).decode("utf-8", "ignore")
+    items = []
+    for m in re.finditer(r'<a[^>]+href="(/book/\d+[^"]*)"[^>]*>(.*?)</a>', doc, re.S):
+        href, inner = m.group(1), m.group(2)
+        title = html.unescape(re.sub(r"<[^>]+>", "", inner)).strip()
+        if not title or len(title) < 2:
+            continue
+        author = "佚名"
+        am = re.search(r'class="[^"]*author[^"]*"[^>]*>([^<]+)<',
+                       doc[max(0, m.start() - 400):m.start()])
+        if am:
+            author = html.unescape(am.group(1)).strip() or "佚名"
+        bid = href.rstrip("/").split("/")[-1]
+        dl = f"https://manybooks.net/book/{bid}/download?format=epub"
+        items.append({
+            "id": f"mb:{bid}",
+            "source": "manybooks", "source_name": "ManyBooks",
+            "title": title, "author": author, "langs": ["en"],
+            "downloads": 0, "page_url": "https://manybooks.net" + href, "cover": "",
+            "files": [{
+                "label": "EPUB（经 ManyBooks）", "ext": ".epub", "native": False,
+                "url": dl, "note": "ManyBooks 公版 EPUB，需转换后送 Kindle",
+            }],
+            "subjects": [],
+        })
+        if len(items) >= 24:
+            break
+    return {"items": items, "count": len(items)}
+
+
+GA_BASE = "https://gutenberg.net.au"
+
+
+def _gutenberg_au(q: str, lang: str, page: int) -> dict:
+    """古登堡澳洲（Project Gutenberg Australia）—— 澳公版（著作权期更短），含更多 20 世纪作品。
+
+    古登堡计划没收的澳/英联邦公版书这里常有。HTML 爬取，最佳努力。
+    """
+    qry = (q or "classic").strip()
+    if qry == "classic":
+        url = f"{GA_BASE}/plusfifty-search.html"
+    else:
+        url = f"{GA_BASE}/cgi-bin/search.cgi?query={urllib.parse.quote(qry)}"
+    try:
+        doc = _get(url, timeout=SEARCH_TIMEOUT, tries=3).decode("utf-8", "ignore")
+    except FreeError:
+        doc = _get(f"{GA_BASE}/", timeout=SEARCH_TIMEOUT, tries=2).decode("utf-8", "ignore")
+    items = []
+    for m in re.finditer(r'href="([^"]+\.html)"[^>]*>([^<]+)</a>', doc):
+        href, title = m.group(1), html.unescape(m.group(2)).strip()
+        if len(title) < 3 or title.lower() in ("home", "search", "index", "next", "prev"):
+            continue
+        if not re.search(r"[\w一-鿿]", title):
+            continue
+        full = href if href.startswith("http") else GA_BASE + ("" if href.startswith("/") else "/") + href
+        items.append({
+            "id": f"ga:{href}",
+            "source": "gutenberg-au", "source_name": "古登堡澳洲",
+            "title": title, "author": "", "langs": ["en"],
+            "downloads": 0, "page_url": full, "cover": "",
+            "files": [{
+                "label": "网页全文（经古登堡澳洲）", "ext": ".txt", "native": True,
+                "url": full, "note": "澳洲公版站多为网页/纯文本，设备直接读",
+            }],
+            "subjects": [],
+        })
+        if len(items) >= 24:
+            break
+    return {"items": items, "count": len(items)}
+
+
+FP_BASE = "https://www.fadedpage.com"
+
+
+def _faded_page(q: str, lang: str, page: int) -> dict:
+    """Faded Page —— 加拿大公版书站（著作权期更短），含更多 20 世纪作品。HTML 爬取，最佳努力。"""
+    qry = (q or "classic").strip()
+    url = f"{FP_BASE}/search.php?srchstr={urllib.parse.quote(qry)}"
+    try:
+        doc = _get(url, timeout=SEARCH_TIMEOUT, tries=3).decode("utf-8", "ignore")
+    except FreeError:
+        doc = _get(f"{FP_BASE}/", timeout=SEARCH_TIMEOUT, tries=2).decode("utf-8", "ignore")
+    items = []
+    for m in re.finditer(r'href="(book\.php\?[^"]+)"[^>]*>([^<]+)</a>', doc):
+        href, title = m.group(1), html.unescape(m.group(2)).strip()
+        if len(title) < 3:
+            continue
+        full = FP_BASE + "/" + href
+        items.append({
+            "id": f"fp:{href}",
+            "source": "fadedpage", "source_name": "Faded Page",
+            "title": title, "author": "", "langs": ["en"],
+            "downloads": 0, "page_url": full, "cover": "",
+            "files": [{
+                "label": "网页全文（经 Faded Page）", "ext": ".txt", "native": True,
+                "url": full, "note": "加拿大公版站多为网页/纯文本，设备直接读",
+            }],
+            "subjects": [],
+        })
+        if len(items) >= 24:
+            break
+    return {"items": items, "count": len(items)}
+
+
 def search(q: str = "", source: str = "all", lang: str = "", page: int = 1) -> dict:
     """跨源检索。任一源挂了不影响另一个源出结果。"""
     q = (q or "").strip()
@@ -503,6 +744,12 @@ def search(q: str = "", source: str = "all", lang: str = "", page: int = 1) -> d
     want_cl = source in ("all", "classics") and (not lang or lang == "zh")
     want_ol = source in ("all", "openlibrary")
     want_ws = source in ("all", "wikisource")
+    # 以下均为英文公版为主，中文检索（lang=zh）时跳过
+    want_ia = source in ("all", "internetarchive") and (not lang or lang == "en")
+    want_fb = source in ("all", "feedbooks") and (not lang or lang == "en")
+    want_mb = source in ("all", "manybooks") and (not lang or lang == "en")
+    want_ga = source in ("all", "gutenberg-au") and (not lang or lang == "en")
+    want_fp = source in ("all", "fadedpage") and (not lang or lang == "en")
     results: dict[str, dict] = {}
     boom: dict[str, str] = {}
 
@@ -528,6 +775,21 @@ def search(q: str = "", source: str = "all", lang: str = "", page: int = 1) -> d
     if want_cl:
         threads.append(("中文经典", threading.Thread(
             target=run, args=("中文经典", lambda: _classics(q, page)), daemon=True)))
+    if want_ia:
+        threads.append(("Internet Archive", threading.Thread(
+            target=run, args=("Internet Archive", lambda: _internet_archive(q, lang, page)), daemon=True)))
+    if want_fb:
+        threads.append(("Feedbooks", threading.Thread(
+            target=run, args=("Feedbooks", lambda: _feedbooks(q, lang, page)), daemon=True)))
+    if want_mb:
+        threads.append(("ManyBooks", threading.Thread(
+            target=run, args=("ManyBooks", lambda: _manybooks(q, lang, page)), daemon=True)))
+    if want_ga:
+        threads.append(("古登堡澳洲", threading.Thread(
+            target=run, args=("古登堡澳洲", lambda: _gutenberg_au(q, lang, page)), daemon=True)))
+    if want_fp:
+        threads.append(("Faded Page", threading.Thread(
+            target=run, args=("Faded Page", lambda: _faded_page(q, lang, page)), daemon=True)))
     for _, t in threads:
         t.start()
     # 整体预算：所有源共享 SEARCH_DEADLINE，而不是每个源各等这么久。
@@ -552,8 +814,8 @@ def search(q: str = "", source: str = "all", lang: str = "", page: int = 1) -> d
     errors = [f"{k}：{v}" for k, v in boom.items()]
     partial = any(t.is_alive() for _, t in threads)
 
-    # 古登堡热度靠前；标准电子书排版更好 —— 精选版排在前面，同源内按热度
-    items.sort(key=lambda x: (0 if x["source"] == "se" else 1, -x["downloads"]))
+    # 古登堡热度靠前；标准电子书 / Internet Archive 排版或体量更好 —— 精选版排在前面，同源内按热度
+    items.sort(key=lambda x: (0 if x["source"] in ("se", "internetarchive") else 1, -x["downloads"]))
 
     data = {"items": items[:40], "count": total, "page": page, "query": q,
             "source": source, "lang": lang, "errors": errors,

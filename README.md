@@ -29,7 +29,7 @@ Kindle 桥在你本机开一个小服务，用数据线连上 Kindle 后，把�
 | **简繁转换** | EPUB / TXT 在**简体 ↔ 繁体**之间互转 | 下载或 `export/traditional/` |
 | **阅读器** | 在本机直接读 EPUB / TXT / MOBI / AZW3，带目录、划线标注、进度记忆、**边读边听**、**划词查词**；支持鼠标点击/滚轮/触摸滑动翻页 | `bookshelf/` |
 | **朗读** | 文字转语音（TTS），本地用 Coqui TTS 合成，不联网 | 浏览器内播放 / 下载 WAV |
-| **公版书库** | 检索并取回 Gutenberg / Standard Ebooks / **Open Library** / **维基文库** / 中文经典（均公有领域） | `inbox/` |
+| **公版书库** | 检索并取回 Gutenberg / Standard Ebooks / **Open Library** / **维基文库** / **Internet Archive** / **Feedbooks** / **ManyBooks** / **古登堡澳洲** / **Faded Page** / 中文经典（均公有领域） | `inbox/` |
 | **标注** | 解析 `My Clippings.txt`，导出笔记 | `export/annotations/` |
 | **生词** | 解析 `vocab.db`，导出 CSV / Anki 词库 | `export/vocab/` |
 | **使用说明** | 页面内图文教程 | — |
@@ -80,6 +80,7 @@ EPUB 转换**只动文本节点**，标签、样式、脚本、图片、字体�
 **朗读**：点工具栏 🔊（或按 `R`）读出当前页，勾上「自动续读」则读完自动翻到下一页接着读；
 选中一段文字后点「🔊 朗读」只读那一句。优先用本机 Coqui TTS（音质好、完全离线），
 **没装 TTS 时自动回落到浏览器自带的语音**，界面上会写明当前用的是哪一种。
+本机 TTS 朗读时，顶部字幕条会**按句同步高亮**当前读到的一句（句子级跟读）。
 
 **划词查词**：选中正文里的词，浮动工具条点「查词」，弹出释义卡片（中文带拼音、
 英文给释义），还能直接 🔊 朗读该词。查询全程**离线、不联网**：
@@ -328,7 +329,7 @@ python app.py --port 8765 --host 127.0.0.1 --no-browser
 - 在阅读器内选中正文词语，浮动工具条点「查词」，弹出释义卡片（中文带拼音、英文给释义），并可 🔊 朗读该词。先查内置小词典，再查 `dictionary/` 下的 StarDict 字典，全程离线。
 
 **公版书库**
-- 「公版书库」页检索 Gutenberg / Standard Ebooks / Open Library / 维基文库 / 中文经典，取回后落入 `inbox/`。
+- 「公版书库」页检索 Gutenberg / Standard Ebooks / Open Library / 维基文库 / Internet Archive / Feedbooks / ManyBooks / 古登堡澳洲 / Faded Page / 中文经典，取回后落入 `inbox/`。
 
 ### 3.3 数据与配置目录
 
