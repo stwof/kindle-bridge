@@ -541,3 +541,29 @@ body.rd-open { overflow: hidden; }
 .rd-speech button { font-size: 12px; padding: 3px 10px; }
 #rd-speech-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .rd-speech-dot { animation: none; } }
+
+/* 导出有声书面板 */
+.rd-drawer #rd-audiobook-body { font-size: 13px; }
+.ab-cmd {
+  font-family: var(--mono, monospace); font-size: 12px;
+  padding: 7px 9px; margin: 6px 0; border-radius: 6px;
+  background: var(--bg, #fff); border: 1px solid var(--line);
+  cursor: pointer; word-break: break-all;
+}
+.ab-cmd:hover { border-color: var(--accent); }
+.ab-ctrl { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+.ab-ctrl select { flex: 1; }
+.ab-progress {
+  margin-top: 10px; padding: 9px 10px; border-radius: 8px;
+  background: var(--bg, #fff); border: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 7px;
+}
+.ab-log {
+  margin: 0; padding: 7px; max-height: 160px; overflow: auto;
+  font-family: var(--mono, monospace); font-size: 11px; line-height: 1.5;
+  white-space: pre-wrap; word-break: break-all; color: var(--muted);
+  background: var(--surface); border-radius: 5px;
+}
+.ab-err { color: var(--danger, #c0392b); font-size: 12px; }
+.rd-drawer .envcard { padding: 10px 11px; margin: 8px 0; }
+.rd-drawer .envcard .ghost { margin: 8px 8px 0 0; }

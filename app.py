@@ -34,6 +34,7 @@ BASE_DIR = paths_mod.data_dir()
 OUT_DIR = os.path.join(BASE_DIR, "export")
 INBOX_DIR = os.path.join(BASE_DIR, "inbox")        # 待投递的电子书放这里
 
+from kindle import audiobook as audio_mod        # noqa: E402
 from kindle import calibre as cal_mod            # noqa: E402
 from kindle import classics as cls_mod           # noqa: E402
 from kindle import clippings as clip_mod          # noqa: E402
@@ -213,6 +214,7 @@ class Handler(BaseHTTPRequestHandler):
                 "tts": {"backend": tts_mod.backend(),
                         "available": tts_mod.available(),
                         "detail": tts_mod.availability_detail()},
+                "audiobook": {"available": bool(audio_mod.exe_path())},
             })
         if path == "/api/data":
             q = urlparse(self.path).query
@@ -226,6 +228,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(self._calibre_state(force="force=1" in q))
         if path == "/api/calibre/progress":
             return self._json(cal_mod.progress())
+        if path == "/api/audiobook/state":
+            q = urlparse(self.path).query
+            return self._json(audio_mod.state(force="force=1" in q))
+        if path == "/api/audiobook/progress":
+            return self._json(audio_mod.progress())
         if path == "/api/free/search":
             return self._free_search(urlparse(self.path).query)
         if path == "/api/free/state":
@@ -322,6 +329,21 @@ class Handler(BaseHTTPRequestHandler):
             if not self._same_origin():
                 return self._json({"error": "拒绝跨站请求"}, 403)
             return self._json(self._calibre_state(force=True))
+
+        if path == "/api/audiobook/redetect":
+            if not self._same_origin():
+                return self._json({"error": "拒绝跨站请求"}, 403)
+            return self._json(audio_mod.state(force=True))
+
+        if path == "/api/audiobook/start":
+            if not self._same_origin():
+                return self._json({"error": "拒绝跨站请求"}, 403)
+            return self._json(self._audiobook_start(payload))
+
+        if path == "/api/audiobook/cancel":
+            if not self._same_origin():
+                return self._json({"error": "拒绝跨站请求"}, 403)
+            return self._json(audio_mod.cancel_convert())
 
         if path == "/api/open":
             target = payload.get("path") or OUT_DIR
@@ -515,6 +537,24 @@ class Handler(BaseHTTPRequestHandler):
             with _LOCK:
                 _CACHE["at"] = 0.0
         return info
+
+    def _audiobook_start(self, payload: dict) -> dict:
+        """把书架里的一本书交给 E2A 转整本有声书。
+
+        书路径只认 reader 的 key（resolve_path 内部做白名单校验），
+        绝不接收前端直接传来的路径，避免任意文件被传给外部进程。
+        """
+        key = str(payload.get("key") or "")
+        path = reader_mod.resolve_path(key)
+        if not path:
+            return {"ok": False, "error": "没找到这本书（可能已移走，点「刷新书架」再试）"}
+        if not audio_mod.exe_path():
+            return {"ok": False, "error": "未检测到 ebook2audiobook，请先按下方命令安装"}
+        meta = reader_mod.meta(path)
+        shown = meta.get("title") or os.path.basename(path)
+        return audio_mod.start_convert(
+            path, lang=str(payload.get("lang") or "zh"),
+            engine=str(payload.get("engine") or ""), shown=shown)
 
     # ---------- 公版书库 ----------
     def _free_search(self, query: str) -> None:

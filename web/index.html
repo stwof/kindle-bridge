@@ -363,6 +363,7 @@
       <button id="rd-toc" class="ghost" title="目录">☰ 目录</button>
       <button id="rd-notes" class="ghost" title="标注">✎ 标注</button>
       <button id="rd-read" class="ghost" title="朗读本页（快捷键 R）">🔊 朗读</button>
+      <button id="rd-audiobook" class="ghost" title="把整本书导出为有声书">🎧 有声书</button>
       <button id="rd-settings" class="ghost" title="阅读设置">Aa 设置</button>
     </div>
   </div>
@@ -420,6 +421,13 @@
   <aside class="rd-drawer" id="rd-notes-drawer" hidden>
     <div class="rd-drawer-head"><b>标注</b><button id="rd-notes-close" class="ghost">收起</button></div>
     <div class="rd-drawer-body" id="rd-notes-list"></div>
+  </aside>
+
+  <aside class="rd-drawer" id="rd-audiobook-drawer" hidden>
+    <div class="rd-drawer-head"><b>导出有声书</b><button id="rd-audiobook-close" class="ghost">收起</button></div>
+    <div class="rd-drawer-body">
+      <div id="rd-audiobook-body"></div>
+    </div>
   </aside>
 
   <aside class="rd-settings" id="rd-settings-panel" hidden>

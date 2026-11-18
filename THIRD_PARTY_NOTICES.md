@@ -41,6 +41,13 @@
 | 名称 | 用途 | 许可 | 说明 |
 |---|---|---|---|
 | [Calibre](https://calibre-ebook.com/) / `ebook-convert` | EPUB↔MOBI/AZW3 转换（阅读器读 MOBI、投递转 AZW3） | GPL-3.0 | 第三方独立软件。本项目只作为**独立进程**调用其命令行，不链接、不分发其代码，因此不改变本项目的 MIT 许可 |
+| [ebook2audiobook](https://github.com/DrewThomasson/ebook2audiobook) | 阅读器「🎧 有声书」：把整本书导出为带章节的 m4b | Apache-2.0 | 第三方独立软件。本项目只作为**独立进程**调用其 headless 命令行（`--headless ... --output_format m4b`），不链接、不复制、不分发其代码或模型；其自身依赖的 50+ TTS 引擎各有许可，请按其官方声明合规使用。仅处理非 DRM、合法获得的电子书 |
+
+> 「导出有声书」是**可选功能**：仓库不打包 ebook2audiobook 的代码、模型或安装程序，
+> 只提供检测、安装命令指引与子进程调用。若用户选择把它 vendored 进仓库再分发，
+> 需附带 Apache-2.0 许可证全文、保留 NOTICE 与修改声明（见下方许可证链接）。
+
+许可证原文：ebook2audiobook：<https://github.com/DrewThomasson/ebook2audiobook/blob/main/LICENSE>
 
 ## 需要时自行下载（不随包分发）
 

@@ -2214,6 +2214,137 @@ const readerSpeech = (() => {
   return { speakText, stop, currentText, isOn: () => S.on };
 })();
 
+  // 把整本书交给 ebook2audiobook 做成有声书（可选外部工具，核心零依赖）
+  const audiobookPanel = (() => {
+    let ST = null;
+    let TIMER = null;
+    const body = () => $('#rd-audiobook-body');
+
+    function stateText() {
+      const e = (ST && ST.e2a) || {};
+      return e.ok ? `ebook2audiobook ${esc(e.version || '')} 已就绪` : '未检测到 ebook2audiobook';
+    }
+
+    function render() {
+      if (!body()) return;
+      const e = (ST && ST.e2a) || {};
+      const inst = (ST && ST.install) || {};
+      const p = (ST && ST.progress) || {};
+      const frag = document.createDocumentFragment();
+      const lead = el('div', 'hint', stateText());
+      frag.appendChild(lead);
+
+      if (!e.ok) {
+        const box = el('div', 'envcard');
+        box.appendChild(el('div', 'env-kicker', '安装（官方命令，复制执行）'));
+        (inst.commands || []).forEach((c) => {
+          const row = el('div', 'ab-cmd');
+          row.textContent = c;
+          row.title = '点击复制';
+          row.addEventListener('click', () => {
+            try { navigator.clipboard.writeText(c); toast('已复制安装命令'); }
+            catch (err) { toast('复制失败，请手动选中'); }
+          });
+          box.appendChild(row);
+        });
+        box.appendChild(el('div', 'hint', inst.note || ''));
+        const a = el('a', 'ghost', '项目主页');
+        a.href = inst.official || 'https://github.com/DrewThomasson/ebook2audiobook';
+        a.target = '_blank'; a.rel = 'noreferrer';
+        box.appendChild(a);
+        const re = mkBtn('重新检测', 'ghost', () => load(true));
+        box.appendChild(re);
+        frag.appendChild(box);
+      } else {
+        const ctrl = el('div', 'ab-ctrl');
+        const sel = el('select', 'search');
+        sel.id = 'rd-ab-lang';
+        [['zh', '中文'], ['en', '英文']].forEach(([v, label]) => {
+          const o = el('option', '', label); o.value = v; sel.appendChild(o);
+        });
+        ctrl.appendChild(sel);
+        const go = mkBtn('开始导出整本', 'primary', () => start());
+        ctrl.appendChild(go);
+        frag.appendChild(ctrl);
+        const hint = el('div', 'hint', '生成带章节的 m4b，落到 export/ 文件夹。首次合成会下载模型，整本转换较慢，CPU 上尤其如此。');
+        frag.appendChild(hint);
+      }
+
+      if (p.active || p.phase === 'done' || p.phase === 'error' || p.phase === 'cancelled') {
+        const st = el('div', 'ab-progress');
+        const label = { converting: '正在转换…', done: '已完成', error: '出错', cancelled: '已取消' }[p.phase] || p.phase;
+        st.appendChild(el('b', '', `${label}${p.book ? ' · ' + esc(p.book) : ''}`));
+        if ((p.log || []).length) st.appendChild(el('pre', 'ab-log', p.log.map(esc).join('\n')));
+        if (p.error) st.appendChild(el('div', 'ab-err', esc(p.error)));
+        if (p.output) {
+          st.appendChild(el('div', 'hint', '输出：' + esc(p.output)));
+          const open = mkBtn('打开 export/', 'ghost', () => {
+            fetch('/api/open', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path: (ST && ST.output_dir) || '' }) });
+          });
+          st.appendChild(open);
+        }
+        if (p.active) st.appendChild(mkBtn('取消', 'ghost', () => cancel()));
+        frag.appendChild(st);
+      }
+      body().replaceChildren(frag);
+    }
+
+    async function load(force) {
+      try {
+        ST = await (await fetch('/api/audiobook/state' + (force ? '?force=1' : ''))).json();
+        render();
+      } catch (e) { toast('读取有声书状态失败：' + e.message); }
+    }
+
+    function poll() {
+      clearInterval(TIMER);
+      TIMER = setInterval(async () => {
+        const drawer = $('#rd-audiobook-drawer');
+        if (!drawer || drawer.hidden) return;
+        try {
+          const p = await (await fetch('/api/audiobook/progress')).json();
+          if (ST) { ST.progress = p; render(); }
+          if (!p.active) clearInterval(TIMER);
+        } catch (e) { /* 静默 */ }
+      }, 2000);
+    }
+
+    async function start() {
+      if (!RD.key) { toast('先打开一本书'); return; }
+      readerSpeech.stop();
+      try {
+        const res = await fetch('/api/audiobook/start', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: RD.key,
+            lang: ($('#rd-ab-lang') && $('#rd-ab-lang').value) || 'zh' }),
+        });
+        const out = await res.json();
+        toast(out.ok ? '已开始转换，可在上方看进度' : (out.error || '启动失败'));
+        await load(false);
+        if (out.ok) poll();
+      } catch (e) { toast('启动失败：' + e.message); }
+    }
+
+    async function cancel() {
+      try {
+        const out = await (await fetch('/api/audiobook/cancel', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+        })).json();
+        toast(out.note || out.error || '已发送取消');
+        await load(false);
+      } catch (e) { toast('取消失败：' + e.message); }
+    }
+
+    function toggle() {
+      const d = $('#rd-audiobook-drawer');
+      d.hidden = !d.hidden;
+      if (!d.hidden) { load(false); poll(); }
+    }
+
+    return { toggle, load, close: () => { $('#rd-audiobook-drawer').hidden = true; clearInterval(TIMER); } };
+  })();
+
   // 自动续读时由朗读器自己翻页，这时不能顺手把朗读停了（byUser=false）
   let _turnLock = 0;            // 多源（滚轮/点击/触摸/epub.js 自带）去重，避免一次操作翻两页
   function readerGo(dir, byUser) {
@@ -2511,6 +2642,8 @@ const readerSpeech = (() => {
       readerSpeech.speakText(t, '正在准备…');
     });
     $('#rd-speech-stop').addEventListener('click', () => readerSpeech.stop());
+    $('#rd-audiobook').addEventListener('click', () => audiobookPanel.toggle());
+    $('#rd-audiobook-close').addEventListener('click', () => audiobookPanel.close());
     $('#rd-sel-read').addEventListener('click', () => {
       const text = RD.sel && RD.sel.text;
       if (!text) { toast('先选中一段文字'); return; }
