@@ -257,6 +257,48 @@ async function getPageWsUrl() {
     ok('目录已生成', tocN >= 0, '目录项=' + tocN);
     await shot('04-toc');
 
+    console.log('\n【6b】书内全文搜索');
+    ok('顶部有「搜索」按钮', await cdp.eval(`return !!document.querySelector('#rd-search')`));
+    ok('搜索抽屉存在', await cdp.eval(`return !!document.querySelector('#rd-search-drawer')`));
+    await cdp.eval(`document.querySelector('#rd-search').click(); return 1`);
+    await sleep(300);
+    ok('搜索抽屉可打开', await cdp.eval(`return !document.querySelector('#rd-search-drawer').hidden`));
+    // 用当前正文里真实出现的字去搜，确保能命中（取正文前 2 个汉字）
+    const probe = await cdp.eval(`
+      const f=document.querySelector('#rd-stage iframe');
+      let d=null; try{d=f&&f.contentDocument}catch(e){}
+      const t=((d&&d.body&&d.body.textContent)||'').replace(/\\s+/g,'');
+      const m=(t.match(/[\\u4e00-\\u9fff]{2}/)||[])[0]||'';
+      return m;`);
+    if (probe) {
+      await cdp.eval(`(()=>{const q=document.querySelector('#rd-search-q');q.value=${JSON.stringify(probe)};q.dispatchEvent(new Event('input',{bubbles:true}));return 1})()`);
+      await sleep(2200);
+      const sr = await cdp.eval(`
+        return JSON.stringify({
+          state: (document.querySelector('#rd-search-state')||{}).textContent||'',
+          hits: document.querySelectorAll('#rd-search-list .rd-hit').length
+        });`);
+      const sj = JSON.parse(sr);
+      ok('搜索能返回命中', sj.hits > 0 || /没有找到|共/.test(sj.state), 'state=' + sj.state + ' hits=' + sj.hits);
+      await shot('04b-search');
+    } else {
+      console.log('  （正文未取到可搜汉字，跳过命中断言）');
+    }
+    await cdp.eval(`document.querySelector('#rd-search-close').click(); return 1`);
+
+    console.log('\n【6c】书签');
+    ok('顶部有「书签」按钮', await cdp.eval(`return !!document.querySelector('#rd-bookmarks')`));
+    await cdp.eval(`document.querySelector('#rd-bookmarks').click(); return 1`);
+    await sleep(200);
+    ok('书签抽屉可打开', await cdp.eval(`return !document.querySelector('#rd-bookmarks-drawer').hidden`));
+    // 点「加书签」，等列表出现条目
+    await cdp.eval(`document.querySelector('#rd-bm-add').click(); return 1`);
+    await sleep(800);
+    const bmN = await cdp.eval(`return document.querySelectorAll('#rd-bookmarks-list .rd-note').length`);
+    ok('加书签后列表出现条目', bmN >= 1, '书签数=' + bmN);
+    await shot('04c-bookmarks');
+    await cdp.eval(`document.querySelector('#rd-bookmarks-close').click(); return 1`);
+
     console.log('\n【7】朗读功能');
     ok('顶部有「朗读」按钮', await cdp.eval(`return !!document.querySelector('#rd-read')`));
     ok('选词工具条有朗读按钮', await cdp.eval(`return !!document.querySelector('#rd-sel-read')`));

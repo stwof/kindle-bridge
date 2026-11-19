@@ -1582,7 +1582,8 @@
   let RD_LIST = [];
   const RD = {
     key: null, meta: null, book: null, rendition: null, toc: [],
-    chapter: '', percent: 0, cfi: '', sel: null, saving: 0, ready: false,
+    chapter: '', href: '', percent: 0, cfi: '', sel: null, saving: 0, ready: false,
+    tocOpen: new Set(), activeHref: '', findTimer: 0, searchSeq: 0, searchOffset: 0,
   };
 
   const _rdPrefs = () => {
@@ -1592,8 +1593,16 @@
     try { localStorage.setItem(RD_KEY, JSON.stringify(p)); } catch (e) { /* 隐私模式会失败，忽略 */ }
   };
 
+  // 字体族：只针对正文 body 设系统字体栈，不碰书内自带样式（标题等），最小侵入。
+  const FONT_STACKS = {
+    system: '"PingFang SC","Hiragino Sans GB","Microsoft YaHei",Georgia,serif',
+    serif:  'SimSun,"Songti SC","Noto Serif CJK SC",Georgia,serif',
+    sans:   '"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",Arial,sans-serif',
+    kai:    'KaiTi,"Kaiti SC",STKaiti,serif',
+  };
+
   function _rdThemeCss(prefs) {
-    const fam = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei",Georgia,serif';
+    const fam = FONT_STACKS[(prefs && prefs.fontFamily) || 'system'] || FONT_STACKS.system;
     const lh = String((prefs && prefs.lineHeight) || 1.7);
     const base = (bg, fg, link) => ({
       body: { background: bg, color: fg, 'font-family': fam, 'line-height': lh, padding: '2px 4px' },
@@ -1912,6 +1921,13 @@
     document.body.classList.add('rd-open');
     readerCloseDrawers();
     readerRenderNotes(meta.annotations || []);
+    readerRenderBookmarks(meta.bookmarks || []);
+    RD.tocOpen = new Set();
+    RD.activeHref = '';
+    RD.searchSeq++;                       // 让进行中的搜索作废
+    $('#rd-search-q').value = '';
+    $('#rd-search-list').innerHTML = '';
+    $('#rd-search-state').textContent = '';
 
     const note = meta.needs_convert
       ? (meta.converter === 'calibre' ? '正在用 Calibre 转换，首次可能要几秒…'
@@ -1949,9 +1965,14 @@
         const doc = contents && contents.document;
         if (!doc || !doc.head) return;
         const style = doc.createElement('style');
-        style.textContent = '.rd-hl{background:rgba(255,213,79,.45);border-radius:2px;'
+        // 高亮色按当前主题直接取值注入。旧代码写的是 '.rd-dark .rd-hl'，但 iframe
+        // 文档里根本没有 .rd-dark 这个祖先（类只打在宿主 #reader-overlay 上），
+        // 导致深色主题下这条规则永远不生效、高亮刺眼。这里按主题给不同透明度。
+        const isDark = _rdPrefs().theme === 'dark';
+        const hlColor = isDark ? 'rgba(255,213,79,.32)' : 'rgba(255,213,79,.45)';
+        const findColor = isDark ? 'rgba(88,170,255,.45)' : 'rgba(55,138,221,.35)';
+        style.textContent = '.rd-hl{background:' + hlColor + ';border-radius:2px;'
           + 'padding:0 1px;box-decoration-break:clone;-webkit-box-decoration-break:clone}'
-          + '.rd-dark .rd-hl{background:rgba(255,213,79,.32)}'
           // 个别书（尤其 Calibre 转出来的 MOBI→EPUB）有超宽元素会把文档撑到几万像素，
           // 既拖慢渲染又让翻页分区错乱——这里统一把内容宽度摁在视口内。
           + (paginated
@@ -1969,7 +1990,10 @@
               + 'html::-webkit-scrollbar{width:0;height:0;display:none}'
               + 'body{overflow-x:visible!important;overflow-y:hidden!important}'
             : 'html,body{max-width:100%!important;overflow-x:hidden!important}')
-          + 'img,svg,table,pre,figure{max-width:100%!important;box-sizing:border-box}';
+          + 'img,svg,table,pre,figure{max-width:100%!important;box-sizing:border-box}'
+          // 搜索命中的瞬时高亮：只改背景色，不碰盒模型/overflow，分页引擎无感
+          + '.rd-find-hl{background:' + findColor + ';border-radius:2px;'
+          + 'box-decoration-break:clone;-webkit-box-decoration-break:clone}';
         doc.head.appendChild(style);
         if (paginated) {
           // manager/容器此时必然已就绪；万一之前没装上（极端时序），这里兜底
@@ -2433,9 +2457,36 @@ const readerSpeech = (() => {
     $('#rd-pct').textContent = Math.round(RD.percent * 100) + '%';
     $('#rd-slider').value = String(Math.round(RD.percent * 1000));
     const href = (s.href || '').split('#')[0];
-    const hit = (RD.toc || []).find((t) => t && t.href && t.href.split('#')[0] === href);
+    RD.href = href;
+    const hit = readerFindToc(RD.toc, href);
     RD.chapter = hit ? (hit.label || '') : '';
+    readerHighlightCurrentToc(href);
     readerSaveProgress();
+  }
+
+  // 递归展平目录（TOC 项可能嵌套 children/subitems），供当前章匹配与高亮
+  function readerTocFlat(toc) {
+    const out = [];
+    const walk = (items) => {
+      for (const t of items || []) {
+        out.push(t);
+        walk(t.children || t.subitems || []);
+      }
+    };
+    walk(toc);
+    return out;
+  }
+  function readerFindToc(toc, href) {
+    if (!href) return null;
+    return readerTocFlat(toc).find((t) => t.href && t.href.split('#')[0] === href) || null;
+  }
+  function readerHighlightCurrentToc(href) {
+    RD.activeHref = href || '';
+    const box = $('#rd-toc-list');
+    if (!box) return;
+    [...box.querySelectorAll('.rd-toc-item')].forEach((b) => {
+      b.classList.toggle('active', !!href && b.dataset.href === href);
+    });
   }
 
   function readerSaveProgress(flush) {
@@ -2541,11 +2592,175 @@ const readerSpeech = (() => {
       box.appendChild(el('div', 'empty', '这本书没有目录'));
       return;
     }
-    for (const t of toc) {
-      const b = el('button', 'rd-toc-item', esc(t.label || '(无题)'));
-      b.addEventListener('click', () => readerJump(t.href));
-      box.appendChild(b);
+    const walk = (items, depth) => {
+      for (const t of items || []) {
+        const kids = t.children || t.subitems || [];
+        const row = el('div', 'rd-toc-row');
+        row.style.paddingLeft = (depth * 14) + 'px';
+        if (kids.length) {
+          const key = t.href || (t.label + '@' + depth);
+          const caret = el('button', 'rd-toc-caret', RD.tocOpen.has(key) ? '▾' : '▸');
+          caret.title = '展开/折叠';
+          caret.addEventListener('click', () => {
+            if (RD.tocOpen.has(key)) RD.tocOpen.delete(key); else RD.tocOpen.add(key);
+            readerRenderToc(RD.toc);
+          });
+          row.appendChild(caret);
+        } else {
+          row.appendChild(el('span', 'rd-toc-caret', '·'));
+        }
+        const b = el('button', 'rd-toc-item', esc(t.label || '(无题)'));
+        b.dataset.href = (t.href || '').split('#')[0];
+        if (b.dataset.href && b.dataset.href === RD.activeHref) b.classList.add('active');
+        b.addEventListener('click', () => readerJump(t.href));
+        row.appendChild(b);
+        box.appendChild(row);
+        if (kids.length && RD.tocOpen.has(key)) walk(kids, depth + 1);
+      }
+    };
+    walk(toc, 0);
+  }
+
+  // ---------- 书内全文搜索 ----------
+  function readerRenderHits(hits, reset) {
+    const list = $('#rd-search-list');
+    if (reset) list.innerHTML = '';
+    const state = $('#rd-search-state');
+    if (!hits || !hits.length) {
+      if (reset) list.appendChild(el('div', 'empty', '没有找到。试试更短的关键词。'));
+      return;
     }
+    for (const h of hits) {
+      const card = el('div', 'rd-hit');
+      card.appendChild(el('div', 'rd-hit-chapter', esc(h.chapter || (h.href || '正文'))));
+      const body = el('div', 'rd-hit-body');
+      // before/match/after 都是正文纯文本，转义后用 <mark> 包命中词，杜绝 XSS
+      body.innerHTML = esc(h.before || '') + '<mark>' + esc(h.match || '')
+        + '</mark>' + esc(h.after || '');
+      card.appendChild(body);
+      card.addEventListener('click', () => readerGoToHit(h));
+      list.appendChild(card);
+    }
+  }
+
+  async function readerGoToHit(h) {
+    if (!RD.rendition) return;
+    readerCloseDrawers();
+    try {
+      // 先跳章（href），落定后再按段文本在 iframe 内找位置高亮
+      await RD.rendition.display(h.href);
+      clearTimeout(RD.findTimer);
+      RD.findTimer = setTimeout(() => {
+        try {
+          const frame = document.querySelector('#rd-stage iframe');
+          const doc = frame && frame.contentDocument;
+          if (!doc || !doc.body) return;
+          [...doc.querySelectorAll('.rd-find-hl')].forEach((n) => {
+            n.replaceWith(...n.childNodes);
+          });
+          const needle = (h.match || '').trim();
+          if (!needle) return;
+          const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+          let node;
+          while ((node = walker.nextNode())) {
+            const i = (node.nodeValue || '').indexOf(needle);
+            if (i < 0) continue;
+            const range = doc.createRange();
+            range.setStart(node, i);
+            range.setEnd(node, i + needle.length);
+            const mark = doc.createElement('span');
+            mark.className = 'rd-find-hl';
+            try { range.surroundContents(mark); } catch (e) { /* 跨节点命中就跳过 */ }
+            break;
+          }
+        } catch (e) { /* 定位高亮是锦上添花，失败不影响跳章 */ }
+      }, 220);
+    } catch (e) { toast('跳转到命中位置失败'); }
+  }
+
+  async function readerDoSearch(reset) {
+    const q = $('#rd-search-q').value.trim();
+    const state = $('#rd-search-state');
+    if (!RD.key) return;
+    if (!q) { state.textContent = '请输入关键词'; return; }
+    if (reset) RD.searchOffset = 0;
+    const seq = ++RD.searchSeq;
+    state.textContent = '搜索中…';
+    $('#rd-search-more').hidden = true;
+    try {
+      const url = '/api/reader/search?key=' + encodeURIComponent(RD.key)
+        + '&q=' + encodeURIComponent(q) + '&limit=20&offset=' + RD.searchOffset;
+      const data = await (await fetch(url)).json();
+      if (seq !== RD.searchSeq) return;   // 期间又输入了新词，丢弃旧结果
+      if (!data.ok) { state.textContent = data.error || '搜索失败'; return; }
+      const ms = data.ms != null ? (' · ' + data.ms + 'ms') : '';
+      state.textContent = data.total ? ('共 ' + data.total + ' 处命中' + ms
+        + (data.truncated ? '（超大书，仅索引前面部分）' : '')) : '没有找到';
+      readerRenderHits(data.hits || [], reset);
+      RD.searchOffset += (data.hits || []).length;
+      $('#rd-search-more').hidden = !(data.hits && data.hits.length === 20 && RD.searchOffset < data.total);
+    } catch (e) {
+      if (seq === RD.searchSeq) state.textContent = '搜索失败：' + e.message;
+    }
+  }
+
+  // ---------- 书签 ----------
+  function readerRenderBookmarks(list) {
+    const box = $('#rd-bookmarks-list');
+    box.innerHTML = '';
+    if (!list || !list.length) {
+      box.appendChild(el('div', 'empty', '还没有书签。读到想回看的地方，点「加书签」。'));
+      return;
+    }
+    for (const b of list) {
+      const item = el('div', 'rd-note');
+      item.appendChild(el('div', 'rd-note-text', esc(b.excerpt || b.chapter || '（无摘录）')));
+      const foot = el('div', 'rd-note-foot');
+      const when = b.created_at ? new Date(b.created_at * 1000).toLocaleDateString() : '';
+      foot.appendChild(el('span', 'hint', esc([when, b.chapter].filter(Boolean).join(' · '))));
+      const go = el('button', 'ghost', '跳转');
+      go.addEventListener('click', () => {
+        readerCloseDrawers();
+        readerJump(b.cfi || b.href);
+      });
+      const del = el('button', 'ghost', '删除');
+      del.addEventListener('click', () => readerBookmarkRemove(b.id));
+      foot.appendChild(go);
+      foot.appendChild(del);
+      item.appendChild(foot);
+      box.appendChild(item);
+    }
+  }
+
+  async function readerBookmarkAdd() {
+    if (!RD.key || !RD.ready) { toast('先打开一本书'); return; }
+    const excerpt = (RD.sel && RD.sel.text ? RD.sel.text : '').slice(0, 80);
+    try {
+      const data = await (await fetch('/api/reader/bookmarks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'add', key: RD.key, cfi: RD.cfi,
+          href: RD.href, chapter: RD.chapter, excerpt }),
+      })).json();
+      if (!data.ok) { toast(data.error || '加书签失败'); return; }
+      const list = (RD.meta.bookmarks || []).filter((b) => b.id !== data.item.id);
+      list.unshift(data.item);
+      RD.meta.bookmarks = list;
+      readerRenderBookmarks(list);
+      toast('书签已添加');
+    } catch (e) { toast('加书签失败：' + e.message); }
+  }
+
+  async function readerBookmarkRemove(id) {
+    try {
+      await fetch('/api/reader/bookmarks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove', key: RD.key, id }),
+      });
+    } catch (e) { /* 后端失败也先抹掉界面 */ }
+    RD.meta.bookmarks = (RD.meta.bookmarks || []).filter((b) => b.id !== id);
+    readerRenderBookmarks(RD.meta.bookmarks);
   }
 
   function readerRenderNotes(list) {
@@ -2594,7 +2809,8 @@ const readerSpeech = (() => {
   }
 
   function readerCloseDrawers() {
-    ['#rd-toc-drawer', '#rd-notes-drawer', '#rd-settings-panel'].forEach((s) => {
+    ['#rd-toc-drawer', '#rd-search-drawer', '#rd-bookmarks-drawer',
+     '#rd-notes-drawer', '#rd-settings-panel'].forEach((s) => {
       const n = $(s);
       if (n) n.hidden = true;
     });
@@ -2651,11 +2867,37 @@ const readerSpeech = (() => {
       readerSpeech.speakText(text, '朗读选中的句子…');
     });
     $('#rd-toc').addEventListener('click', () => readerToggleDrawer('#rd-toc-drawer'));
+    $('#rd-search').addEventListener('click', () => {
+      readerToggleDrawer('#rd-search-drawer');
+      if (!$('#rd-search-drawer').hidden) setTimeout(() => $('#rd-search-q').focus(), 0);
+    });
+    $('#rd-bookmarks').addEventListener('click', () => readerToggleDrawer('#rd-bookmarks-drawer'));
     $('#rd-notes').addEventListener('click', () => readerToggleDrawer('#rd-notes-drawer'));
     $('#rd-settings').addEventListener('click', () => readerToggleDrawer('#rd-settings-panel'));
     $('#rd-toc-close').addEventListener('click', () => { $('#rd-toc-drawer').hidden = true; });
+    $('#rd-search-close').addEventListener('click', () => { $('#rd-search-drawer').hidden = true; });
+    $('#rd-bookmarks-close').addEventListener('click', () => { $('#rd-bookmarks-drawer').hidden = true; });
     $('#rd-notes-close').addEventListener('click', () => { $('#rd-notes-drawer').hidden = true; });
     $('#rd-settings-close').addEventListener('click', () => { $('#rd-settings-panel').hidden = true; });
+
+    // 搜索：输入防抖 250ms + 回车立即查 + 加载更多
+    let searchTimer = 0;
+    $('#rd-search-q').addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      if (!$('#rd-search-q').value.trim()) {
+        RD.searchSeq++;
+        $('#rd-search-list').innerHTML = '';
+        $('#rd-search-state').textContent = '';
+        $('#rd-search-more').hidden = true;
+        return;
+      }
+      searchTimer = setTimeout(() => readerDoSearch(true), 250);
+    });
+    $('#rd-search-q').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); clearTimeout(searchTimer); readerDoSearch(true); }
+    });
+    $('#rd-search-more').addEventListener('click', () => readerDoSearch(false));
+    $('#rd-bm-add').addEventListener('click', readerBookmarkAdd);
     $('#rd-sel-hl').addEventListener('click', readerSelHighlight);
     $('#rd-sel-dict').addEventListener('click', readerSelDict);
     $('#rd-sel-copy').addEventListener('click', readerSelCopy);
@@ -2674,12 +2916,16 @@ const readerSpeech = (() => {
       hideDictPop();
     });
 
+    // 拖动时只预览百分比（不重排、不写盘），松手才真正跳转，避免一次拖动触发几十次重排
+    $('#rd-slider').addEventListener('input', () => {
+      $('#rd-pct').textContent = Math.round((+$('#rd-slider').value) / 10) + '%';
+    });
     $('#rd-slider').addEventListener('change', () => {
       if (!RD.book || !RD.book.locations || !RD.book.locations.length) return;
       const p = (+$('#rd-slider').value) / 1000;
       try {
         const cfi = RD.book.locations.cfiFromPercentage(p);
-        readerJump(cfi);
+        readerJump(cfi).then(() => readerSaveProgress(true));
       } catch (e) { /* 定位没建好就忽略 */ }
     });
 
@@ -2706,6 +2952,7 @@ const readerSpeech = (() => {
       });
     };
     bindSeg('#rd-size', 'fontSize', 'str');
+    bindSeg('#rd-font', 'fontFamily', 'str');
     bindSeg('#rd-line', 'lineHeight', 'num');
     bindSeg('#rd-width', 'width', 'num');
     bindSeg('#rd-theme', 'theme', 'str');
@@ -2720,6 +2967,7 @@ const readerSpeech = (() => {
     $('#rd-settings').addEventListener('click', () => {
       const p = _rdPrefs();
       syncSeg('#rd-size', p.fontSize || 100);
+      syncSeg('#rd-font', p.fontFamily || 'system');
       syncSeg('#rd-line', p.lineHeight || 1.7);
       syncSeg('#rd-width', p.width || 0);
       syncSeg('#rd-theme', p.theme || 'light');
@@ -2729,12 +2977,24 @@ const readerSpeech = (() => {
     // 键盘：左右翻页、Esc 退出
     document.addEventListener('keydown', (e) => {
       if ($('#reader-overlay').hidden) return;
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        readerToggleDrawer('#rd-search-drawer');
+        if (!$('#rd-search-drawer').hidden) setTimeout(() => $('#rd-search-q').focus(), 0);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+        e.preventDefault();
+        readerBookmarkAdd();
+        return;
+      }
+      const typing = e.target && e.target.closest && e.target.closest('input,textarea,select');
       if (e.key === 'Escape') { readerClose(); }
+      else if (typing) { return; }   // 在搜索框等输入控件里时，方向键/空格交给控件本身
       else if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); readerGo(1); }
       else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); readerGo(-1); }
-      else if (e.key === ' ' && !e.target.closest('input,textarea,select')) { e.preventDefault(); readerGo(e.shiftKey ? -1 : 1); }
+      else if (e.key === ' ') { e.preventDefault(); readerGo(e.shiftKey ? -1 : 1); }
       else if (e.key === 'r' || e.key === 'R') {
-        if (e.target.closest('input,textarea,select')) return;
         e.preventDefault();
         $('#rd-read').click();
       }
@@ -2757,7 +3017,11 @@ const readerSpeech = (() => {
 
   // 抽屉/设置是否开着（开着时不翻页）
   function readerAnyDrawerOpen() {
-    return !$('#rd-toc-drawer').hidden || !$('#rd-notes-drawer').hidden || !$('#rd-settings-panel').hidden;
+    return ['#rd-toc-drawer', '#rd-search-drawer', '#rd-bookmarks-drawer',
+      '#rd-notes-drawer', '#rd-settings-panel'].some((s) => {
+      const n = $(s);
+      return n && !n.hidden;
+    });
   }
   // 是否有选区（正在划词，不要当成翻页）
   function readerHasSelection() {

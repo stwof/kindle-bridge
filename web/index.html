@@ -361,6 +361,8 @@
     <div class="rd-title" id="rd-title"></div>
     <div class="rd-top-actions">
       <button id="rd-toc" class="ghost" title="目录">☰ 目录</button>
+      <button id="rd-search" class="ghost" title="书内全文搜索（快捷键 Ctrl+F）">🔍 搜索</button>
+      <button id="rd-bookmarks" class="ghost" title="书签（快捷键 Ctrl+D 添加）">🔖 书签</button>
       <button id="rd-notes" class="ghost" title="标注">✎ 标注</button>
       <button id="rd-read" class="ghost" title="朗读本页（快捷键 R）">🔊 朗读</button>
       <button id="rd-audiobook" class="ghost" title="把整本书导出为有声书">🎧 有声书</button>
@@ -418,6 +420,24 @@
     <div class="rd-drawer-body" id="rd-toc-list"></div>
   </aside>
 
+  <aside class="rd-drawer" id="rd-search-drawer" hidden>
+    <div class="rd-drawer-head"><b>书内搜索</b><button id="rd-search-close" class="ghost">收起</button></div>
+    <div class="rd-drawer-body">
+      <input id="rd-search-q" type="search" maxlength="200" placeholder="搜索书中文字，回车查询…" autocomplete="off">
+      <div class="hint" id="rd-search-state" style="padding:6px 2px"></div>
+      <div id="rd-search-list"></div>
+      <button id="rd-search-more" class="ghost" hidden style="margin-top:8px">加载更多</button>
+    </div>
+  </aside>
+
+  <aside class="rd-drawer" id="rd-bookmarks-drawer" hidden>
+    <div class="rd-drawer-head"><b>书签</b><button id="rd-bookmarks-close" class="ghost">收起</button></div>
+    <div class="rd-drawer-body">
+      <button id="rd-bm-add" class="primary" style="width:100%;margin-bottom:8px">＋ 在当前位置加书签</button>
+      <div id="rd-bookmarks-list"></div>
+    </div>
+  </aside>
+
   <aside class="rd-drawer" id="rd-notes-drawer" hidden>
     <div class="rd-drawer-head"><b>标注</b><button id="rd-notes-close" class="ghost">收起</button></div>
     <div class="rd-drawer-body" id="rd-notes-list"></div>
@@ -433,9 +453,14 @@
   <aside class="rd-settings" id="rd-settings-panel" hidden>
     <div class="rd-drawer-head"><b>阅读设置</b><button id="rd-settings-close" class="ghost">收起</button></div>
     <div class="rd-drawer-body">
-      <div class="rd-set-row"><span>字体</span>
+      <div class="rd-set-row"><span>字号</span>
         <div class="rd-seg" id="rd-size">
           <button data-v="90">小</button><button data-v="100" class="on">中</button><button data-v="112">大</button><button data-v="128">特大</button>
+        </div>
+      </div>
+      <div class="rd-set-row"><span>字体</span>
+        <div class="rd-seg" id="rd-font">
+          <button data-v="system" class="on">系统</button><button data-v="serif">宋体</button><button data-v="sans">黑体</button><button data-v="kai">楷体</button>
         </div>
       </div>
       <div class="rd-set-row"><span>行距</span>
@@ -462,7 +487,6 @@
   </aside>
 </div>
 
-<div id="toast" class="toast"></div>
 <div id="toast" class="toast"></div>
 <!-- 顺序有讲究：JSZip 必须先于 epub.js（epub.js 依赖全局 JSZip 解 EPUB 压缩包） -->
 <script src="vendor/jszip.min.js"></script>

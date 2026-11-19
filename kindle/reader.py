@@ -39,6 +39,7 @@ _DATA = paths_mod.data_dir()
 SHELF_DIR = os.path.join(_DATA, "bookshelf")
 PROGRESS_PATH = os.path.join(SHELF_DIR, "progress.json")
 ANNOT_PATH = os.path.join(SHELF_DIR, "annotations.json")
+BOOKMARK_PATH = os.path.join(SHELF_DIR, "bookmarks.json")
 _BOOKS_CACHE = os.path.join(_DATA, "tools", "cache", "reader", "books")
 _COVERS_CACHE = os.path.join(_DATA, "tools", "cache", "reader", "covers")
 
@@ -532,3 +533,65 @@ def remove_annot(key: str, annot_id: str) -> bool:
         else:
             data.pop(key, None)
         return _write_json(ANNOT_PATH, data)
+
+
+# ---------------------------------------------------------------------------
+# 书签（与标注隔离的独立 JSON：软删除、幂等 id，结构可向后兼容）
+# ---------------------------------------------------------------------------
+def load_bookmarks() -> dict:
+    with _lock:
+        return _read_json(BOOKMARK_PATH)
+
+
+def bookmarks_of(key: str) -> list[dict]:
+    """只返回未删除的书签，按创建时间倒序（与界面「最近在上」一致）。"""
+    lst = load_bookmarks().get(key) or []
+    alive = [b for b in lst if not b.get("deleted_at")]
+    return sorted(alive, key=lambda b: b.get("created_at") or 0, reverse=True)
+
+
+def add_bookmark(key: str, cfi: str = "", href: str = "", chapter: str = "",
+                 excerpt: str = "", note: str = "") -> dict:
+    if not _KEY_RE.match(key or ""):
+        return {"ok": False, "error": "无效的书目标识"}
+    excerpt = (excerpt or "").strip()[:80]
+    cfi = (cfi or "").strip()
+    if not cfi and not href:
+        return {"ok": False, "error": "这个位置还不能被标记（缺少定位信息）"}
+    # href 兜底进 id：同一段但不同 cfi 的手工书签也能共存
+    bid = hashlib.sha1(f"{key}|{cfi or href}|{excerpt}".encode("utf-8")).hexdigest()[:12]
+    now = int(time.time())
+    item = {"id": bid, "cfi": cfi, "href": (href or "").strip(),
+            "chapter": (chapter or "").strip(), "excerpt": excerpt,
+            "note": (note or "").strip()[:2000],
+            "created_at": now, "updated_at": now, "deleted_at": 0, "at": now}
+    with _lock:
+        data = _read_json(BOOKMARK_PATH)
+        lst = data.get(key) or []
+        old = next((b for b in lst if b.get("id") == bid), None)
+        if old:
+            # 已删除的同位置书签 -> 恢复；否则只更新时间，不产生重复项
+            old["deleted_at"] = 0
+            old["updated_at"] = now
+            if note:
+                old["note"] = item["note"]
+            item = old
+        else:
+            lst.insert(0, item)
+        data[key] = lst
+        if not _write_json(BOOKMARK_PATH, data):
+            return {"ok": False, "error": "写不进书架目录，检查磁盘权限"}
+    return {"ok": True, "item": item}
+
+
+def remove_bookmark(key: str, bid: str) -> bool:
+    """软删除：只置 deleted_at，数据还在文件里，将来可做「最近删除」。"""
+    with _lock:
+        data = _read_json(BOOKMARK_PATH)
+        lst = data.get(key) or []
+        hit = next((b for b in lst if b.get("id") == bid and not b.get("deleted_at")), None)
+        if not hit:
+            return False
+        hit["deleted_at"] = int(time.time())
+        hit["updated_at"] = hit["deleted_at"]
+        return _write_json(BOOKMARK_PATH, data)

@@ -46,11 +46,14 @@ R._DATA = TMP
 R.SHELF_DIR = os.path.join(TMP, "书架")
 R.PROGRESS_PATH = os.path.join(R.SHELF_DIR, "进度.json")
 R.ANNOT_PATH = os.path.join(R.SHELF_DIR, "标注.json")
+R.BOOKMARK_PATH = os.path.join(R.SHELF_DIR, "书签.json")
 R._BOOKS_CACHE = os.path.join(TMP, "工具", "缓存", "阅读器", "书籍")
 R._COVERS_CACHE = os.path.join(TMP, "工具", "缓存", "阅读器", "封面")
 R.dev_mod.find_kindle = lambda: None          # 测试不读设备
 
-INBOX = os.path.join(TMP, "收书")
+# 注意：代码在英文化后从 inbox/ 读「收书」；这里目录名必须用 inbox，
+# 但展示标签仍是中文「收书」（见 _shelf_dirs），所以下面的 source 断言保持「收书」。
+INBOX = os.path.join(TMP, "inbox")
 os.makedirs(INBOX, exist_ok=True)
 
 JPEG = bytes.fromhex("ffd8ffe000104a46494600010100000100010000ffdb004300ffd9")

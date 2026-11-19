@@ -15,6 +15,8 @@
   --red-soft: #fcebeb;
   --amber: #ba7517;
   --amber-soft: #faeeda;
+  --mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --danger: #c0392b;
   --radius: 12px;
 }
 
@@ -494,9 +496,57 @@ body.rd-open { overflow: hidden; }
 }
 .rd-seg button.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 
-/* 阅读器主题仅作用于「文字内容区域」（.rd-stage 舞台 + .rd-loading 加载层），
-   由 JS 写入 #reader-overlay 的 --rd-bg / --rd-fg 驱动；顶/底栏（含按钮）保持
-   app 原生外观（--surface 浅底 + ghost 按钮），不被主题染色，确保按钮区域观感稳定。 */
+/* 阅读器主题：整套界面（正文 + 顶底栏 + 抽屉 + 设置 + 工具条）统一跟随主题。
+   JS 在 #reader-overlay 上写 --rd-bg/--rd-fg 并打 rd-theme-* 类，这里为三种主题
+   补齐界面层色板（面板底/文字/描边/按钮/次级文字），保证深色下没有浅色残留。 */
+#reader-overlay { --rd-panel: var(--surface); --rd-line2: var(--line);
+  --rd-muted2: var(--muted); --rd-btn: var(--surface); }
+#reader-overlay.rd-theme-sepia { --rd-panel: #f6ecd9; --rd-line2: rgba(74,63,48,.18);
+  --rd-muted2: #8a795e; --rd-btn: #efe3ca; }
+#reader-overlay.rd-theme-dark { --rd-panel: #232321; --rd-line2: rgba(216,214,208,.16);
+  --rd-muted2: #9a978f; --rd-btn: #2e2e2b; }
+
+/* 顶栏 / 底栏 / 抽屉 / 设置面板 / 浮动工具条随主题染色，按钮继承文字色保证可辨 */
+.reader .rd-top, .reader .rd-bottom, .reader .rd-drawer, .reader .rd-settings {
+  background: var(--rd-panel, var(--surface)); color: var(--rd-fg, var(--text));
+  border-color: var(--rd-line2, var(--line));
+}
+.reader .rd-top button, .reader .rd-bottom button,
+.reader .rd-top .rd-title, .reader .rd-selbar, .reader .rd-speech, .reader .rd-dict,
+.reader .rd-drawer-head button, .reader .rd-settings button {
+  color: var(--rd-fg, var(--text));
+}
+.reader .rd-drawer-head, .reader .rd-dict-head {
+  border-color: var(--rd-line2, var(--line)); background: var(--rd-panel, var(--surface));
+}
+.reader .rd-seg button { background: var(--rd-btn, var(--surface)); color: var(--rd-muted2, var(--muted));
+  border-color: var(--rd-line2, var(--line)); }
+.reader .rd-seg button.on { border-color: var(--accent); color: var(--accent); }
+.reader .rd-set-row { color: var(--rd-muted2, var(--muted)); border-color: var(--rd-line2, var(--line)); }
+.reader .rd-drawer-body .hint, .reader .rd-search-state { color: var(--rd-muted2, var(--muted)); }
+.reader .rd-selbar { background: var(--rd-panel, var(--surface)); border-color: var(--rd-line2, var(--line)); }
+.reader .rd-speech { background: var(--rd-panel, var(--surface)); border-color: var(--rd-line2, var(--line)); }
+.reader .rd-dict { background: var(--rd-panel, var(--surface)); border-color: var(--rd-line2, var(--line)); }
+.reader .rd-dict-body { color: var(--rd-fg, var(--text)); }
+.reader #rd-search-q { background: var(--rd-btn, var(--surface)); color: var(--rd-fg, var(--text));
+  border: 1px solid var(--rd-line2, var(--line)); border-radius: 8px;
+  padding: 8px 10px; width: 100%; font-size: 13px; }
+.reader #rd-search-q:focus { outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(29,158,117,.2); }
+
+/* 目录：层级缩进 + 折叠箭头 + 当前章高亮 */
+.rd-toc-row { display: flex; align-items: center; }
+.rd-toc-caret { flex: none; width: 18px; text-align: center; border: 0; background: transparent;
+  color: var(--rd-muted2, var(--muted)); cursor: pointer; font-size: 11px; }
+.rd-toc-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+/* 搜索命中卡片 */
+.rd-hit { padding: 9px 8px; border-bottom: 1px dashed var(--rd-line2, var(--line)); cursor: pointer; border-radius: 6px; }
+.rd-hit:hover { background: var(--accent-soft); }
+.rd-hit-chapter { font-size: 11.5px; color: var(--accent); margin-bottom: 3px; }
+.rd-hit-body { font-size: 12.5px; line-height: 1.6; color: var(--rd-muted2, var(--muted));
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.rd-hit-body mark { background: rgba(55,138,221,.3); color: var(--rd-fg, var(--text)); border-radius: 2px; }
 
 .tts-opts { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 4px 0 10px; }
 .tts-opts select {

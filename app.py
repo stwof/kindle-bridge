@@ -35,6 +35,7 @@ OUT_DIR = os.path.join(BASE_DIR, "export")
 INBOX_DIR = os.path.join(BASE_DIR, "inbox")        # 待投递的电子书放这里
 
 from kindle import audiobook as audio_mod        # noqa: E402
+from kindle import booksearch as booksearch_mod  # noqa: E402  书内全文搜索（纯标准库）
 from kindle import calibre as cal_mod            # noqa: E402
 from kindle import classics as cls_mod           # noqa: E402
 from kindle import clippings as clip_mod          # noqa: E402
@@ -255,6 +256,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._reader_epub("key=" + m_book.group(1))
         if path == "/api/reader/cover":
             return self._reader_cover(urlparse(self.path).query)
+        if path == "/api/reader/search":
+            return self._reader_search(urlparse(self.path).query)
         if path == "/api/dict/lookup":
             return self._dict_lookup(urlparse(self.path).query)
         return self._static(path.lstrip("/"))
@@ -403,6 +406,18 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(reader_mod.add_annot(
                 key, payload.get("text") or "", payload.get("cfi") or "",
                 payload.get("note") or "", payload.get("chapter") or ""))
+
+        if path == "/api/reader/bookmarks":
+            if not self._same_origin():
+                return self._json({"error": "拒绝跨站请求"}, 403)
+            action = (payload.get("action") or "add").strip().lower()
+            key = payload.get("key") or ""
+            if action == "remove":
+                return self._json({"ok": reader_mod.remove_bookmark(key, payload.get("id") or "")})
+            return self._json(reader_mod.add_bookmark(
+                key, payload.get("cfi") or "", payload.get("href") or "",
+                payload.get("chapter") or "", payload.get("excerpt") or "",
+                payload.get("note") or ""))
 
         return self._json({"error": "not found"}, 404)
 
@@ -893,6 +908,38 @@ class Handler(BaseHTTPRequestHandler):
         from urllib.parse import parse_qs
         return (parse_qs(query).get("key") or [""])[0]
 
+    def _reader_search(self, query: str):
+        """书内全文搜索：用阅读器那份可读 EPUB 建/取索引，返回带上下文的命中。
+
+        索引在进程内缓存（按 key + 源文件 mtime），首次建索引可能几百毫秒到数秒，
+        之后的查询都是纯内存。所有书路径都过 resolve_path 白名单，查询串限长。
+        """
+        from urllib.parse import parse_qs
+        p = parse_qs(query)
+        key = (p.get("key") or [""])[0]
+        q = (p.get("q") or [""])[0]
+        try:
+            limit = int((p.get("limit") or ["20"])[0])
+        except ValueError:
+            limit = 20
+        try:
+            offset = int((p.get("offset") or ["0"])[0])
+        except ValueError:
+            offset = 0
+        path = reader_mod.resolve_path(key)
+        if not path:
+            return self._json({"ok": False, "error": "没找到这本书（无效标识或已移走）"}, 400)
+        ready = reader_mod.ensure_readable(path)
+        if not ready.get("ok"):
+            return self._json({"ok": False, "error": ready.get("error") or "无法准备这本书"}, 400)
+        try:
+            idx = booksearch_mod.get_index(ready["path"], key)
+            return self._json(booksearch_mod.query(idx, q, limit, offset))
+        except ValueError as ex:
+            return self._json({"ok": False, "error": str(ex)}, 400)
+        except Exception as ex:                                # noqa: BLE001
+            return self._json({"ok": False, "error": f"搜索失败：{ex}"}, 500)
+
     def _reader_meta(self, query: str):
         """一本书的阅读信息：元信息、封面、上次读到哪、已有哪些标注。
 
@@ -919,6 +966,7 @@ class Handler(BaseHTTPRequestHandler):
             "epub_url": f"/api/reader/epub?key={key}",
             "last": reader_mod.load_progress().get(key) or {},
             "annotations": reader_mod.annots_of(key),
+            "bookmarks": reader_mod.bookmarks_of(key),
         }
         if ext not in (".epub", ".txt", ".text", ".md"):
             # MOBI 家族要外调 Calibre，先把“能不能转”说清楚，别等用户点了才报错
